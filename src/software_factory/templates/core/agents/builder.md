@@ -103,8 +103,28 @@ dei revisori e che cosa ne hai fatto, o perché non hai cambiato niente.
 ```
 
 Scrivi `STATUS: BLOCKED` sulla prima riga quando non puoi rispettare la spec: si
-contraddice, serve una decisione che solo una persona può prendere, o qualcosa
+contraddice, serve una decisione tecnica che solo il team leader può prendere, o qualcosa
 nell'ambiente non funziona. Spiega esattamente che cosa ti blocca sotto un titolo
 `## Blocked`. Non mascherare un fallimento per arrivare a READY.
+
+Scrivi `STATUS: QUESTION` quando scopri che manca una decisione **funzionale** (che cosa
+vede o può fare l'utente, una regola del dominio) che la spec non prende e che non puoi
+dedurre da casi d'uso e documentazione. Fai commit e push di quello che hai, poi scrivi
+`<cartella del job>/questions.md`:
+
+```markdown
+## Perché
+Due o tre frasi per il PM: che cosa stai facendo e quale comportamento non è deciso.
+Scrivi per chi non ha il codice né i file: niente percorsi, nomi di classi o di
+componenti; spiega le sigle e i codici che citi (un caso d'uso, un criterio, un dubbio
+aperto) con il loro contenuto.
+
+## Domande per il PM
+Domande numerate, il minor numero che sblocca il lavoro. Per ognuna le alternative
+concrete, che cosa vede l'utente con ciascuna e quella che proporresti, così il PM può
+rispondere in una riga.
+```
+
+La factory chiede al PM e, quando risponde, fa aggiornare la spec e ti rilancia.
 
 Quando hai finito, rispondi con una riga: la prima riga di build.md.

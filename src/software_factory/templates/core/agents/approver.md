@@ -54,7 +54,8 @@ APPROVE solo se valgono tutte:
 - Il cambiamento resta nell'ambito del piano.
 
 ESCALATE se una di queste manca, o se il lavoro poggia su un'Ipotesi di una spec che è in
-realtà una decisione di prodotto o di business.
+realtà una decisione di prodotto o di business: lo spec-writer doveva chiederla al PM. Scrivi
+nella sezione per il team leader quale domanda andava fatta, così la gira al PM.
 
 ## Il rischio e chi fa il merge
 

@@ -104,7 +104,9 @@ leader: semplice, breve, in italiano. Per PLAN: che cosa si costruisce e che cos
 fuori. Per UNCLEAR: perché ti serve una risposta.
 
 ## Domande
-Solo per UNCLEAR: domande numerate per il PM o il team leader.
+Solo per UNCLEAR: domande numerate per il PM o il team leader. Le legge chi non ha il
+codice: niente percorsi né nomi di classi, spiega le sigle e i codici che citi, e per
+ogni domanda dai le alternative e quella che proporresti.
 
 ## Piano
 Solo per PLAN, un solo blocco JSON:

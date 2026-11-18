@@ -99,6 +99,13 @@ def queue(f):
                 if nxt and nxt["stage"] == "queued":
                     candidates.append(("start", nxt["id"], f"T{nxt['task']}", "queued",
                                        f"sf advance {nxt['id']} spec", f"[{nxt['repo']}] {nxt['title']}"))
+        elif st == "question":
+            parent = by_id[j["parent"]]
+            if f.latest_instruction(parent):
+                candidates.append(("resume", jid, tid, st, f"sf advance {jid} spec",
+                                   f"il PM ha risposto su T{parent['task']}"))
+            else:
+                waits.append(("wait", jid, tid, st, "-", f"aspetta la risposta del PM su T{parent['task']}"))
         elif st == "needs-human":
             if f.latest_instruction(j):
                 candidates.append(("resume", jid, tid, st, f"sf advance {jid} build", "il team leader ha risposto"))

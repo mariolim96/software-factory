@@ -23,11 +23,12 @@ To Do, i commenti arrivati dopo quella nota sono le correzioni da cui riparte il
 
 ```
 task padre: tag factory, To Do
-  triage (fable) ── UNCLEAR → nota interna con le domande, resta in To Do
+  triage (fable) ── UNCLEAR → nota con le domande e attività al PM, resta in To Do
        │ PLAN: sottotask BE (per la factory) e FE (per una persona, con il contratto API)
        ▼
   per ogni sottotask BE, in ordine:
     spec-writer → builder → gate (script) → revisori instradati → verificatori → merge nel branch del padre
+    (una scelta funzionale non decisa: domande al PM, il padre torna in To Do finché risponde)
        ▼ tutti uniti                              (max_rounds giri, poi il team leader)
   approver sul branch completo → merge automatico nel branch di integrazione, se il livello
        │                         di rischio lo consente (altrimenti PR pronta al team leader)

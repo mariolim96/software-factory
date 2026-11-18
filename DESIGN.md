@@ -40,7 +40,12 @@ nuovo. Un padre in `ready` o `needs-human` torna a `triage` quando il team leade
 il triage aggiunge i sottotask di correzione sullo stesso branch.
 
 **Sottotask**: `queued → spec → build → gate → review → verify → merging → merged`, più
-`needs-human`, da cui torna in `build` con il commento del team leader come `feedback-<k>.md`.
+`needs-human`, da cui torna in `build` con il commento del team leader come `feedback-<k>.md`,
+e `question`: lo spec-writer o il builder trovano una scelta funzionale che né il piano né la
+documentazione decidono e scrivono `questions.md`. La factory pubblica le domande sul task
+padre, lo riporta in To Do e assegna un'attività al PM. Il primo commento del PM o del team
+leader dopo la nota riporta il sottotask in `spec` (il padre torna In Progress); le scelte
+tecniche restano allo spec-writer, quelle che solo il team leader può prendere a `needs-human`.
 `verify` c'è solo quando un revisore ha un finding `[Importante]`: i verificatori votano, e
 il sottotask torna in `build` se resta almeno un finding confermato, altrimenti va al merge.
 Lo stadio successivo lo dice `sf reviews` (`NEXT:`).
@@ -53,7 +58,7 @@ Stadi di Odoo:
 
 | Factory | Odoo |
 |---|---|
-| triage, unclear | To Do |
+| triage, unclear, un sottotask in question | To Do |
 | building | In Progress |
 | approve, ready | Review |
 | test | Test |

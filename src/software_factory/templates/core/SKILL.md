@@ -102,7 +102,12 @@ per esempio `t9563-s9601 T9601: gate PASS → review (code sonnet, security opus
 ### Sottotask (back-end e front-end)
 
 **spec.** Dopo `sf advance <job> spec` (te lo dice la coda), lancia `spec-writer` con
-`<header>`. Quando torna: `sf advance <job> build` e vai a **build**.
+`<header>`. Quando torna:
+- se ha scritto `questions.md` (risponde `QUESTION: ...`): `sf advance <job> question`. La
+  factory pubblica le domande sul task padre, lo riporta in To Do e assegna un'attività al
+  PM; il job aspetta. Quando il PM risponde, la coda dà `resume` con `sf advance <job> spec`:
+  rilancia lo spec-writer.
+- altrimenti `sf advance <job> build` e vai a **build**.
 
 **build.** Lancia o riprendi `builder-<job>` con `<header> Giro <N>.` più lo scopo del
 giro: il `round-<N-1>/checks.md` del gate, le review in `round-<N-1>/`, o il
@@ -111,6 +116,7 @@ giro: il `round-<N-1>/checks.md` del gate, le review in `round-<N-1>/`, o il
   push, niente PR, albero sporco), riprendi il builder una volta con il rifiuto. Se rifiuta
   ancora, ferma questo job e dillo all'utente.
 - `STATUS: BLOCKED`: `sf advance <job> needs-human`.
+- `STATUS: QUESTION`: `sf advance <job> question`, come per lo spec-writer.
 
 **gate.** Esegui `sf gate <job>` con Bash in background (`run_in_background`): dura
 minuti. Stampa `GATE: PASS` o `GATE: FAIL`.

@@ -522,3 +522,39 @@ def test_gate_run_is_logged(factory, monkeypatch):
     factory.gate(sub["id"])
     work = factory.load(sub["id"])["work"]
     assert [(w["what"], w["note"]) for w in work] == [("gate", "giro 1: PASS")]
+
+
+def test_spec_writer_asks_the_pm(factory):
+    job = factory.create(100)
+    (factory.dir(job["id"]) / "triage.md").write_text(PLAN)
+    job = factory.advance(factory.locked(job["id"]), "building")
+    o = factory.odoo
+    sub = factory.advance(factory.locked(job["subs"][0]), "spec")
+    d = factory.dir(sub["id"])
+    with pytest.raises(Refused, match="Domande per il PM"):
+        factory.advance(sub, "question")
+    (d / "questions.md").write_text("## Perché\nIl caso d'uso non lo dice.\n\n## Domande per il PM\n1. Campo o testo?\n",
+                                    encoding="utf-8")
+    sub = factory.advance(sub, "question")
+    assert sub["stage"] == "question"
+    assert o.notes[-1][0] == 100 and o.notes[-1][1] == "domande per il PM" and "Campo o testo?" in o.notes[-1][2]
+    assert o.tasks_db[100]["stage_id"][0] == STAGES["todo"]
+    assert o.activities[-1][:2] == (100, "pm")
+    parent = factory.load(job["id"])
+    assert parent["last_note"] > 0
+    with pytest.raises(Refused, match="no answer from the PM"):
+        factory.advance(sub, "spec")
+    o.msgs.append({"task": 100, "id": parent["last_note"] + 1})
+    sub = factory.advance(sub, "spec")
+    assert sub["stage"] == "spec" and (d / "questions-1.md").exists() and not (d / "questions.md").exists()
+    assert o.tasks_db[100]["stage_id"][0] == STAGES["in_progress"]
+    assert factory.load(job["id"])["last_note"] == parent["last_note"] + 1
+
+
+def test_triage_unclear_asks_the_pm_with_an_activity(factory):
+    job = factory.create(100)
+    (factory.dir(job["id"]) / "triage.md").write_text(
+        "DECISION: UNCLEAR\nRISK: low\nSURFACES: none\n\n## Nota per il ticket\nServe sapere.\n\n## Domande\n1. Quale?\n")
+    factory.advance(factory.locked(job["id"]), "unclear")
+    assert factory.odoo.activities[-1][:2] == (100, "pm")
+    assert "Rispondi con un commento" in factory.odoo.notes[-1][2]

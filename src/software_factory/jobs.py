@@ -64,8 +64,9 @@ PARENT = {
 }
 SUB = {
     "queued": {"spec"},
-    "spec": {"build"},
-    "build": {"gate", "needs-human"},
+    "spec": {"build", "question"},
+    "build": {"gate", "needs-human", "question"},
+    "question": {"spec"},
     "gate": {"review", "build", "needs-human"},
     "review": {"verify", "merging", "build", "needs-human"},
     "verify": {"merging", "build", "needs-human"},
@@ -77,6 +78,7 @@ RUNNING = {"parent": {"triage", "approve", "merging"},
            "sub": {"spec", "build", "gate", "review", "verify", "merging"}}
 REPO_ORDER = {"be": 0, "fe": 1}
 RISK_RANK = {"low": 0, "medium": 1, "high": 2}
+ANSWER_HINT = "\n\nRispondi con un commento su questo task: la factory riparte dalla tua risposta."
 
 
 def riskier(*levels):
@@ -277,7 +279,9 @@ class Factory:
             if stage == "unclear":
                 text = section(d / "triage.md", "Nota per il ticket") or ""
                 questions = section(d / "triage.md", "Domande") or ""
-                self.note(job, f"{text}\n\n{questions}".strip(), "servono chiarimenti")
+                text = f"{text}\n\n{questions}".strip()
+                self.note(job, text + ANSWER_HINT, "servono chiarimenti")
+                self.odoo.activity(job["task"], "pm", f"Factory: T{job['task']} ha domande per te", text)
             else:
                 self._plan(job, d / "triage.md")
 
@@ -638,6 +642,31 @@ class Factory:
                 else:
                     git(repo, "worktree", "add", "-b", job["branch"], str(wt), f"origin/{job['base']}")
             self.odoo.set_stage(job["task"], "in_progress")
+            self.write_task_md(job)
+
+        elif stage == "question":  # from spec or build: a functional decision only the PM can take
+            questions = section(d / "questions.md", "Domande per il PM") if (d / "questions.md").exists() else None
+            require(questions, "questions.md has no ## Domande per il PM")
+            parent = self.parent_of(job)
+            why = section(d / "questions.md", "Perché") or ""
+            text = (f"Per il sottotask T{job['task']} ({job['title']}) serve una decisione del PM.\n\n"
+                    f"{why}\n\n{questions}").replace("\n\n\n", "\n\n")
+            self.note(parent, text + ANSWER_HINT, "domande per il PM")
+            self.save(parent)
+            self.odoo.set_stage(parent["task"], "todo")
+            self.odoo.activity(parent["task"], "pm", f"Factory: T{parent['task']} ha domande per te", text)
+
+        elif old == "question":  # → spec, with the PM's answer
+            parent = self.parent_of(job)
+            answer = self.latest_instruction(parent)
+            require(answer, f"no answer from the PM on T{parent['task']} since the questions")
+            self.require_slot(job["id"])
+            k = len(list(d.glob("questions-*.md"))) + 1
+            (d / "questions.md").rename(d / f"questions-{k}.md")
+            self.write_task_md(parent)  # the answer is NEW in the parent's task.md
+            parent["last_note"] = answer
+            self.save(parent)
+            self.odoo.set_stage(parent["task"], "in_progress")
             self.write_task_md(job)
 
         elif old == "spec":
