@@ -85,6 +85,14 @@ i contratti (per esempio file OpenAPI), segui quel formato e cita i file. Il con
 diventa vincolante: la spec back-end lo deve rispettare e il revisore delle API lo
 confronta con il codice.
 
+- **documentazione**: solo se il prompt ha una riga `Repo docs:`. La factory li realizza nel
+  repo `docs` dopo tutti quelli di codice. Pianificane uno quando il task cambia qualcosa che
+  la documentazione descrive (un caso d'uso, un requisito, un criterio di accettazione, uno
+  scenario di test) o chiude un dubbio aperto con una decisione del PM. Il brief elenca i
+  documenti e gli elementi da aggiornare (per numero: AC-01-01-12, dubbio n. 72) e la fonte
+  di ogni cambiamento. Rischio `low`, salvo che tocchi decisioni ancora da prendere.
+  Senza riga `Repo docs:`, scrivi in Nota per il ticket che cosa andrà aggiornato a mano.
+
 Un task può non avere sottotask front-end, o non averne back-end (allora la factory
 crea solo i sottotask front-end e aspetta che siano Done).
 
@@ -122,6 +130,10 @@ Solo per PLAN, un solo blocco JSON:
     {"title": "titolo breve", "brief": "che cosa deve fare l'interfaccia, in Markdown",
      "contract": "la parte del contratto che usa questo sottotask, in Markdown",
      "risk": "low|medium|high", "surfaces": ["ui", "ux"]}
+  ],
+  "docs": [
+    {"title": "titolo breve", "brief": "documenti ed elementi da aggiornare, con la fonte, in Markdown",
+     "risk": "low"}
   ]
 }
 ```

@@ -76,7 +76,8 @@ SUB = {
 TERMINAL = {"done", "dropped", "merged"}
 RUNNING = {"parent": {"triage", "approve", "merging"},
            "sub": {"spec", "build", "gate", "review", "verify", "merging"}}
-REPO_ORDER = {"be": 0, "fe": 1}
+REPO_ORDER = {"be": 0, "fe": 1, "docs": 2}  # docs last: it describes what the code became
+PLAN_KINDS = ("backend", "frontend", "docs")
 RISK_RANK = {"low": 0, "medium": 1, "high": 2}
 ANSWER_HINT = "\n\nRispondi con un commento su questo task: la factory riparte dalla tua risposta."
 
@@ -371,6 +372,8 @@ class Factory:
         factory_fe = job.get("fe_mode") == "factory"
         require(not (factory_fe and plan["frontend"]) or self.home.has_repo("fe"),
                 "the task asks the factory for the front-end, but factory.json has no `fe` repository")
+        require(not plan["docs"] or self.home.has_repo("docs"),
+                "the plan has documentation sub-tasks, but factory.json has no `docs` repository")
         contract = (plan.get("contract") or "").strip()
         if contract:
             (self.dir(job["id"]) / "contract.md").write_text(contract + "\n", encoding="utf-8")
@@ -404,6 +407,14 @@ class Factory:
                     job["fe_tasks"].append(sid)
                     self.save(job)
                 lines.append(f"- T{sid} (front-end): {item['title']}")
+        if plan["docs"]:
+            self._ensure_parent_branch(job, "docs")
+        for i, item in enumerate(plan["docs"]):
+            sid = self._subtask(job, f"{prefix}-docs{i}", item["title"],
+                                f"{item['brief']}\n\nSottotask di documentazione di T{job['task']}: lo realizza "
+                                "la factory dopo il codice.", [], [])
+            self._add_sub(job, sid, item, "docs")
+            lines.append(f"- T{sid} (documentazione, factory): {item['title']}")
         summary = section(triage, "Nota per il ticket") or ""
         self.note(job, f"{summary}\n\nSottotask creati:\n\n" + "\n".join(lines), "piano")
         if o.stage_key(o.task(job["task"])["stage_id"]) == "todo":
@@ -933,10 +944,10 @@ def read_plan(path, cfg):
         plan = json.loads(m.group(1))
     except ValueError as e:
         raise Refused(f"the plan in triage.md isn't valid JSON: {e}") from None
-    plan.setdefault("backend", [])
-    plan.setdefault("frontend", [])
-    require(plan["backend"] or plan["frontend"], "the plan has no sub-task")
-    for kind in ("backend", "frontend"):
+    for kind in PLAN_KINDS:
+        plan.setdefault(kind, [])
+    require(any(plan[k] for k in PLAN_KINDS), "the plan has no sub-task")
+    for kind in PLAN_KINDS:
         for item in plan[kind]:
             require(item.get("title") and item.get("brief"), f"every {kind} sub-task needs a title and a brief")
             item.setdefault("risk", "medium")

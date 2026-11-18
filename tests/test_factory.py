@@ -438,7 +438,7 @@ def test_test_note_comes_from_the_approver(factory):
     assert factory.odoo.tasks_db[100]["stage_id"][0] == STAGES["test"]
 
 
-@pytest.mark.parametrize("profile", ["java-maven", "angular", "react", "python", "node", "odoo"])
+@pytest.mark.parametrize("profile", ["java-maven", "angular", "react", "python", "node", "odoo", "docs"])
 def test_every_routed_reviewer_has_an_agent(tmp_path, monkeypatch, profile):
     from software_factory import scaffold
     monkeypatch.setattr(scaffold, "run", lambda *a, **k: None)  # no git clone
@@ -558,3 +558,21 @@ def test_triage_unclear_asks_the_pm_with_an_activity(factory):
     factory.advance(factory.locked(job["id"]), "unclear")
     assert factory.odoo.activities[-1][:2] == (100, "pm")
     assert "Rispondi con un commento" in factory.odoo.notes[-1][2]
+
+
+DOCS_PLAN = PLAN.replace('"frontend": [', '"docs": [{"title": "Aggiorna AC-01", "brief": "Riscrivi AC-01.", "risk": "low"}],\n  "frontend": [')
+
+
+def test_docs_subtask_runs_after_the_code(factory):
+    assert '"docs"' in DOCS_PLAN
+    job = factory.create(100)
+    (factory.dir(job["id"]) / "triage.md").write_text(DOCS_PLAN, encoding="utf-8")
+    with pytest.raises(Refused, match="no `docs` repository"):
+        factory.advance(factory.locked(job["id"]), "building")
+    factory.home.cfg["repos"]["docs"] = {"github": "o/docs", "base_branch": "main", "profile": "docs",
+                                         "routing": {"low": {"docs": "sonnet"}}}
+    job = factory.advance(factory.locked(job["id"]), "building")
+    subs = [factory.load(s) for s in job["subs"]]
+    assert [s["repo"] for s in subs][-1] == "docs" and "docs" in job["repos"]
+    docs = factory.odoo.tasks_db[subs[-1]["task"]]
+    assert docs["tag_ids"] == [] and "documentazione" in factory.odoo.notes[-1][2]

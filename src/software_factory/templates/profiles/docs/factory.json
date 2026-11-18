@@ -1,0 +1,12 @@
+{
+  "agent_sets": [],
+  "routing": {
+    "low": { "docs": "sonnet" },
+    "medium": { "docs": "sonnet" },
+    "high": { "docs": "opus" }
+  },
+  "surface_reviewers": {},
+  "path_reviewers": {},
+  "high_risk_paths": [],
+  "protected_paths": [".github/**"]
+}

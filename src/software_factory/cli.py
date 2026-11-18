@@ -180,7 +180,7 @@ def main(argv=None):
             p.add_argument("--profile")
             p.add_argument("--repo")
             p.add_argument("--base", default="main")
-            p.add_argument("--key", default="be", help="be (back-end) o fe (front-end)")
+            p.add_argument("--key", default="be", help="be (back-end), fe (front-end) o docs (documentazione)")
             a = p.parse_args(args)
             root, done = init(a.dir, a.profile, a.repo, a.base, a.key)
             print(f"{root}:\n" + "\n".join(f"- {d}" for d in done))

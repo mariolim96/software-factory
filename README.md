@@ -107,6 +107,22 @@ il minimo di tempo umano che non aumenta revert e incidenti.
 - **Misure.** `sf metrics`: giri per arrivare al merge, finding respinti, merge automatici per
   livello, revert dei task della factory. Servono a decidere se allargare `merge_policy`.
 
+## Documentazione
+
+Se il progetto ha un repository di documentazione (casi d'uso, criteri di accettazione,
+dubbi), aggiungilo con il profilo `docs`:
+
+```
+sf add-repo docs --profile docs --repo OWNER/NAME --base main
+```
+
+Il triage pianifica allora anche sottotask di documentazione, che la factory realizza dopo
+quelli di codice: allineano i documenti al codice unito e alle decisioni del PM, senza
+rinumerare gli identificativi. Il gate controlla spazi e link relativi; li rivede
+`reviewer-docs`. Il merge segue `merge_policy` come per il codice. Lascia il repository anche
+tra i `references`: gli agenti degli altri sottotask lo leggono da lì, e `/factory run` lo
+aggiorna a ogni avvio con `sf refs`.
+
 ## Ore
 
 `sf log` elenca, per ogni ticket, gli intervalli di lavoro della factory, con ora di inizio e di

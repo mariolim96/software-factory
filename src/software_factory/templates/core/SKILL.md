@@ -99,7 +99,7 @@ per esempio `t9563-s9601 T9601: gate PASS → review (code sonnet, security opus
   attesa del front-end; se qualcosa fallisce, porta il job al team leader.
 - `ESCALATE`: `sf advance <job> needs-human`.
 
-### Sottotask (back-end e front-end)
+### Sottotask (back-end, front-end e documentazione)
 
 **spec.** Dopo `sf advance <job> spec` (te lo dice la coda), lancia `spec-writer` con
 `<header>`. Quando torna:
@@ -156,7 +156,8 @@ sottotask, `done` o `dropped` per i padri).
 
 ## /factory run
 
-1. Esegui `sf queue`. Ogni riga è `azione job task stadio next nota`:
+1. Esegui `sf refs` (aggiorna i riferimenti in sola lettura, anche la documentazione che la
+   factory stessa ha unito), poi `sf queue`. Ogni riga è `azione job task stadio next nota`:
    - `base`: il branch di integrazione non è ancora stato controllato a questo commit.
      Esegui `sf gate --base` in background e, quando finisce, di nuovo `sf queue`.
    - `pause`: il branch di integrazione è rosso. Non avviare niente: di' all'utente quale
