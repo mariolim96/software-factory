@@ -16,8 +16,9 @@
   sf reviews <job>                refresh the round's verdicts; prints NEXT: wait|verify|merge|build|needs-human
   sf summary [<job>...]           table of jobs: stage, round, PR, cost
   sf metrics [--days N]           review and merge numbers: rounds to merge, findings rejected, auto merges, reverts
-  sf log [<task|job>...] [--days N | --since YYYY-MM-DD] [--totals]
-                                  hours of work per ticket: every agent and gate run, with totals
+  sf log [<task|job>...] [--days N | --since YYYY-MM-DD] [--totals | --timesheet]
+                                  hours of work per ticket: every agent and gate run, with totals;
+                                  --timesheet: per day and ticket, rounded, to copy into the timesheet
   sf mcp                          run the read-only Odoo MCP server (stdio)
 """
 
@@ -144,12 +145,14 @@ def cmd_metrics(f, days):
 def cmd_log(f, args):
     from datetime import datetime, timedelta
 
-    from .hours import report, tz
+    from .hours import report, timesheet, tz
     p = argparse.ArgumentParser(prog="sf log")
     p.add_argument("jobs", nargs="*")
     p.add_argument("--days", type=int)
     p.add_argument("--since", help="YYYY-MM-DD")
     p.add_argument("--totals", action="store_true", help="solo il totale di ogni ticket")
+    p.add_argument("--timesheet", action="store_true",
+                   help="per giorno e ticket, le ore arrotondate da segnare nel timesheet")
     a = p.parse_args(args)
     since = None
     if a.since:
@@ -159,7 +162,8 @@ def cmd_log(f, args):
             raise Refused(f"--since {a.since}: usa YYYY-MM-DD") from None
     elif a.days:
         since = datetime.now(UTC) - timedelta(days=a.days)
-    print("\n".join(report(f, a.jobs, since, a.totals)))
+    lines = timesheet(f, a.jobs, since) if a.timesheet else report(f, a.jobs, since, a.totals)
+    print("\n".join(lines))
 
 
 def main(argv=None):

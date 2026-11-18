@@ -192,6 +192,7 @@ e agisci. Ogni cambio di stato passa comunque dai comandi `sf`.
   intero quando la risposta è lì.
 - **Le ore** ("factory log", quanto ci ha messo, ore per ticket): stampa `sf log` così com'è,
   con `--days N`, `--since AAAA-MM-GG`, `--totals` o i numeri dei task se l'utente restringe.
+  Per segnare le ore nel timesheet: `sf log --timesheet` (per giorno e ticket, arrotondate).
 - **Che cosa aspetta qualcuno**: `sf queue`, e per ogni riga `wait` spiega che cosa manca.
 - **Istruzioni, correzioni, decisioni**: la factory le prende solo da Odoo, come commenti
   del PM o del team leader sul task, perché lì l'autore è verificato. Di' all'utente di

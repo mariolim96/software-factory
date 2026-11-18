@@ -126,7 +126,17 @@ T10327  E2E-002: allineare il caso del checkbox ...  (building)
   del merge li registra `sf` stesso.
 - Non conta il tempo dell'orchestratore tra un agente e l'altro, né le attese di persone.
 - Filtri: `sf log T<n>` (un ticket con i suoi sottotask), `--days N`, `--since AAAA-MM-GG`,
-  `--totals` (solo i totali). Gli orari sono nel fuso `timezone` di `factory.json`, o in quello
+  `--totals` (solo i totali).
+- **Per il timesheet**: `sf log --timesheet --days 7` raggruppa per giorno e per ticket, con le
+  ore arrotondate per eccesso a `timesheet_round_minutes` (15 di default) e le attività svolte:
+
+  ```
+  2026-11-18 mer
+    T9882   0:15   0.25 h  Data prima commercializzazione: recupero automatico da BDF
+                           analisi, specifica, sviluppo, review, approvazione
+    totale  0:15   0.25 h
+  ```
+ Gli orari sono nel fuso `timezone` di `factory.json`, o in quello
   della macchina.
 
 ```json

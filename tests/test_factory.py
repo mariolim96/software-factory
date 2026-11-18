@@ -500,6 +500,13 @@ def test_hours_per_ticket(factory, tmp_path, monkeypatch):
     # 10 triage + 30 builder + 15 gate + 20 reviewers + 15 builder = 1:30; agent hours add the second reviewer
     assert "  ore di lavoro 1:30 (ore agente 1:50)" in out
     assert out[-1] == "totale 1:30 ore di lavoro su 1 ticket (ore agente 1:50)"
+    monkeypatch.setattr(factory.home, "get", lambda k, d=None: {"timezone": "UTC"}.get(k, d))
+    ts = hours.timesheet(factory, [])
+    assert ts[0] == "2026-11-18 mer"
+    assert ts[1].split()[:4] == ["T100", "1:30", "1.50", "h"]
+    assert ts[2].strip() == "analisi, sviluppo, controlli, review"
+    assert ts[-1].split() == ["totale", "1:30", "1.50", "h"]
+    assert hours.round_up(1, 15) == 15 and hours.round_up(16 * 60, 15) == 30 and hours.round_up(0, 15) == 0
     since = hours.parse("2026-11-18T11:30:00Z")
     assert hours.report(factory, [], since, totals_only=True)[1] == "  ore di lavoro 0:15 (ore agente 0:15)"
 
