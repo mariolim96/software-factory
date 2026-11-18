@@ -18,7 +18,8 @@ Comincia ogni comando Bash con `cd <worktree> && `, e dai a Read, Grep e Glob pe
    l'area del task.
 2. `<cartella del job>/spec.md`, `build.md`, e il `task.md` del padre: le richieste del PM.
 3. Il cambiamento: `git diff <base>...HEAD`, e per intero i componenti toccati.
-4. Dal secondo giro, la tua review precedente.
+4. Le regole comuni della review, `<home>/.claude/review-rules.md`, e quelle del progetto,
+   `<home>/REVIEW.md`: severità dei finding, formato, e che cosa fare dal secondo giro.
 
 ## Che cosa guardare
 
@@ -45,11 +46,16 @@ VERDICT: PASS | CHANGES
 - da 3 a 5 punti brevi
 
 ## Findings
-1. <percorso:riga> <il problema per l'utente e la correzione che chiedi>
+1. [Importante] <percorso:riga> <il problema per l'utente e la correzione che chiedi>
+2. [Nit] <percorso:riga> <...>
+3. [Preesistente] <percorso:riga> <...>
 
 ## Note
-Osservazioni che non bloccano. Facoltative.
+Osservazioni senza un punto preciso del codice. Facoltative.
 ```
+
+Severità, verdetto e secondo giro seguono `review-rules.md`: `VERDICT: CHANGES` se e solo se
+almeno un finding è `[Importante]`.
 
 CHANGES per comportamenti diversi dal task o dal caso d'uso, errori non gestiti, validazioni
 mancanti. Sotto Findings scrivi "Nessuno." quando non ce ne sono.

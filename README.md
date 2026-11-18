@@ -27,9 +27,10 @@ task padre: tag factory, To Do
        │ PLAN: sottotask BE (per la factory) e FE (per una persona, con il contratto API)
        ▼
   per ogni sottotask BE, in ordine:
-    spec-writer → builder → gate (script) → revisori instradati → merge nel branch del padre
+    spec-writer → builder → gate (script) → revisori instradati → verificatori → merge nel branch del padre
        ▼ tutti uniti                              (max_rounds giri, poi il team leader)
-  approver sul branch completo → merge nel branch di integrazione (o PR pronta al team leader)
+  approver sul branch completo → merge automatico nel branch di integrazione, se il livello
+       │                         di rischio lo consente (altrimenti PR pronta al team leader)
        ▼
   FE tutti Done? no → tag "In attesa front-end", ricontrollato a ogni run
        ▼ sì
@@ -82,6 +83,37 @@ Lancia Claude Code dalla home e scrivi `/factory run`.
 Rilanciare `sf init` sulla stessa cartella aggiorna agenti, skill e profilo. Non tocca invece
 `factory.json`, `checks/`, `PROJECT.md` e le impostazioni.
 
+## Review e merge automatici
+
+La review segue le idee di [Solving code review at Anthropic](https://claude.dev/blog/solving-code-review-at-anthropic/):
+il minimo di tempo umano che non aumenta revert e incidenti.
+
+- **Finding con severità.** Ogni revisore etichetta i finding `[Importante]` (blocca),
+  `[Nit]` o `[Preesistente]` (non bloccano). Le regole comuni sono in
+  `.claude/review-rules.md`; quelle del progetto in `REVIEW.md` della home, scritto dal team.
+- **Verifica.** Prima che il builder li veda, ogni finding `[Importante]` passa da
+  `verify.votes` verificatori indipendenti (agente `verifier`) e resta solo con almeno
+  `verify.confirm` conferme. `sf` scrive `round-N/findings.md` per il builder e lo commenta
+  sulla PR.
+- **Convergenza.** Dal secondo giro i revisori controllano le correzioni e rivedono solo il
+  diff dal commit del giro prima; non ripresentano finding respinti; segnalano la classe di
+  errore, non la singola istanza. Dopo `max_rounds` giri decide il team leader.
+- **Livelli di rischio.** Il livello del padre è il più alto tra triage, sottotask e approver.
+  `merge_policy` dice quali livelli la factory unisce da sola (`auto`) e quali consegna al
+  team leader (`human`). I file in `high_risk_paths` e un `NEEDS-HUMAN` dell'approver
+  vogliono sempre una persona. Prima del merge la factory allinea il branch e ripete il gate,
+  e scrive nella descrizione della PR rischio, test e come annullarla.
+- **Misure.** `sf metrics`: giri per arrivare al merge, finding respinti, merge automatici per
+  livello, revert dei task della factory. Servono a decidere se allargare `merge_policy`.
+
+```json
+"merge_policy": { "low": "auto", "medium": "human", "high": "human" },
+"verify": { "votes": 2, "confirm": 2, "model": "sonnet" }
+```
+
+`parent_merge` delle home precedenti vale ancora: `human` è tutto al team leader, `auto` tutto
+alla factory tranne il rischio alto.
+
 ## Comandi
 
 ```
@@ -106,9 +138,9 @@ un task si toglie il tag.
 - Gli agenti leggono Odoo attraverso tre strumenti in sola lettura. La allowlist di ogni
   agente sta nel suo `tools:`. Il builder e i revisori non hanno accesso a Odoo.
 - Il gate usa i controlli della home, fuori dal repo, e fallisce i branch che toccano
-  `protected_paths`. Il merge sul branch di integrazione resta al team leader quando lo
-  chiede `parent_merge: human`, quando il rischio è alto o quando sono toccati
-  `high_risk_paths`.
+  `protected_paths`. Il merge sul branch di integrazione resta al team leader quando
+  `merge_policy` lo riserva al livello di rischio, quando sono toccati `high_risk_paths` o
+  quando l'approver scrive `NEEDS-HUMAN`.
 - La factory fa push solo dei branch `factory/*` e fa merge solo con `sf merge`. Non fa
   deploy.
 

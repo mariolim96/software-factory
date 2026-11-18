@@ -57,6 +57,7 @@ def sync_managed(root, cfg):
     skill = root / ".claude" / "skills" / "factory"
     skill.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(core / "SKILL.md", skill / "SKILL.md")
+    shutil.copyfile(core / "review-rules.md", root / ".claude" / "review-rules.md")
     profiles_dir = root / ".claude" / "profiles"
     profiles_dir.mkdir(parents=True, exist_ok=True)
     for name in names:
@@ -105,7 +106,7 @@ def init(target, profile, repo, base, key="be"):
         "command": sf, "args": ["mcp"], "env": {"SF_HOME": str(root)}}}}, indent=2) + "\n")
     done.append(f".mcp.json: server odoo con {sf}")
 
-    for src, dst in (("PROJECT.md", "PROJECT.md"), ("gitignore", ".gitignore")):
+    for src, dst in (("PROJECT.md", "PROJECT.md"), ("REVIEW.md", "REVIEW.md"), ("gitignore", ".gitignore")):
         if not (root / dst).exists():
             shutil.copyfile(core / src, root / dst)
 

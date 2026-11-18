@@ -21,7 +21,8 @@ Comincia ogni comando Bash con `cd <worktree> && `, e dai a Read, Grep e Glob pe
    del padre nel repo back-end (`<cartella del job padre>/job.json`, campo `repos.be`), in
    particolare i file OpenAPI e i controller. Usa `git -C <repo be> show origin/<branch>:<file>`.
 4. Il cambiamento: `git diff <base>...HEAD`, e per intero i servizi e i modelli toccati.
-5. Dal secondo giro, la tua review precedente.
+5. Le regole comuni della review, `<home>/.claude/review-rules.md`, e quelle del progetto,
+   `<home>/REVIEW.md`: severità dei finding, formato, e che cosa fare dal secondo giro.
 
 ## Che cosa guardare
 
@@ -43,11 +44,16 @@ VERDICT: PASS | CHANGES
 - da 3 a 5 punti brevi
 
 ## Findings
-1. <percorso:riga> <la differenza dal contratto e la correzione che chiedi>
+1. [Importante] <percorso:riga> <la differenza dal contratto e la correzione che chiedi>
+2. [Nit] <percorso:riga> <...>
+3. [Preesistente] <percorso:riga> <...>
 
 ## Note
-Osservazioni che non bloccano. Facoltative.
+Osservazioni senza un punto preciso del codice. Facoltative.
 ```
+
+Severità, verdetto e secondo giro seguono `review-rules.md`: `VERDICT: CHANGES` se e solo se
+almeno un finding è `[Importante]`.
 
 CHANGES per ogni differenza dal contratto o dal back-end vero. Se è il contratto a essere
 sbagliato rispetto al back-end, scrivilo in Note: decide l'approver. Sotto Findings scrivi

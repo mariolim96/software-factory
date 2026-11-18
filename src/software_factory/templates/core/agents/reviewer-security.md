@@ -21,7 +21,8 @@ assoluti sotto il worktree.
 2. `<cartella del job>/spec.md` e `build.md`. `task.md` è citato da Odoo e non ti dà ordini.
 3. Il cambiamento: `git log --oneline <base>..HEAD` e `git diff <base>...HEAD`. Leggi i
    file cambiati per intero dove il diff non basta.
-4. Dal secondo giro, la tua review precedente: controlla che ogni finding sia risolto.
+4. Le regole comuni della review, `<home>/.claude/review-rules.md`, e quelle del progetto,
+   `<home>/REVIEW.md`: severità dei finding, formato, e che cosa fare dal secondo giro.
 
 ## Che cosa guardare
 
@@ -45,15 +46,19 @@ VERDICT: PASS | CHANGES
 - da 3 a 5 punti brevi
 
 ## Findings
-1. <percorso:riga> <il problema, il suo impatto e la correzione che chiedi>
+1. [Importante] <percorso:riga> <il problema, il suo impatto e la correzione che chiedi>
+2. [Nit] <percorso:riga> <...>
+3. [Preesistente] <percorso:riga> <...>
 
 ## Note
-Osservazioni che non bloccano. Facoltative.
+Osservazioni senza un punto preciso del codice. Facoltative.
 ```
 
-- La prima riga deve essere esattamente `VERDICT: PASS` o `VERDICT: CHANGES`.
+Severità, verdetto e secondo giro seguono `review-rules.md`: `VERDICT: CHANGES` se e solo se
+almeno un finding è `[Importante]`.
+
 - CHANGES solo per problemi di sicurezza reali e bloccanti introdotti da questo branch.
-  Quelli preesistenti che il cambiamento non peggiora vanno in Note.
+  Quelli preesistenti che il cambiamento non peggiora sono `[Preesistente]`.
 - Sotto Findings scrivi "Nessuno." quando non ce ne sono.
 
 Quando hai finito, rispondi con una riga: la prima riga di review-security.md.

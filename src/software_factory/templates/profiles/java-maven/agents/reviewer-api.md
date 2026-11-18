@@ -22,7 +22,8 @@ assoluti sotto il worktree.
    `<cartella del job>/spec.md`.
 3. Il cambiamento: `git diff <base>...HEAD`, e per intero i file OpenAPI, i controller e i
    DTO toccati.
-4. Dal secondo giro, la tua review precedente.
+4. Le regole comuni della review, `<home>/.claude/review-rules.md`, e quelle del progetto,
+   `<home>/REVIEW.md`: severità dei finding, formato, e che cosa fare dal secondo giro.
 
 ## Che cosa guardare
 
@@ -44,11 +45,16 @@ VERDICT: PASS | CHANGES
 - da 3 a 5 punti brevi
 
 ## Findings
-1. <percorso:riga> <la differenza dal contratto e la correzione che chiedi>
+1. [Importante] <percorso:riga> <la differenza dal contratto e la correzione che chiedi>
+2. [Nit] <percorso:riga> <...>
+3. [Preesistente] <percorso:riga> <...>
 
 ## Note
-Osservazioni che non bloccano. Facoltative.
+Osservazioni senza un punto preciso del codice. Facoltative.
 ```
+
+Severità, verdetto e secondo giro seguono `review-rules.md`: `VERDICT: CHANGES` se e solo se
+almeno un finding è `[Importante]`.
 
 CHANGES per ogni differenza dal contratto e ogni rottura di retrocompatibilità non prevista.
 Se pensi che sia il contratto a essere sbagliato, scrivilo in Note: decide l'approver o il

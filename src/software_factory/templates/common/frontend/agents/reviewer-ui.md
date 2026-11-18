@@ -18,7 +18,8 @@ Comincia ogni comando Bash con `cd <worktree> && `, e dai a Read, Grep e Glob pe
    la descrizione cita un mockup o un comportamento visivo, è ciò che il PM si aspetta di vedere.
 3. Il cambiamento: `git diff <base>...HEAD`, e per intero template, stili e componenti toccati.
 4. Due o tre pagine esistenti simili, per confrontare lo stile.
-5. Dal secondo giro, la tua review precedente.
+5. Le regole comuni della review, `<home>/.claude/review-rules.md`, e quelle del progetto,
+   `<home>/REVIEW.md`: severità dei finding, formato, e che cosa fare dal secondo giro.
 
 ## Che cosa guardare
 
@@ -40,13 +41,18 @@ VERDICT: PASS | CHANGES
 - da 3 a 5 punti brevi
 
 ## Findings
-1. <percorso:riga> <il problema e la correzione che chiedi>
+1. [Importante] <percorso:riga> <il problema e la correzione che chiedi>
+2. [Nit] <percorso:riga> <...>
+3. [Preesistente] <percorso:riga> <...>
 
 ## Note
-Osservazioni che non bloccano. Facoltative.
+Osservazioni senza un punto preciso del codice. Facoltative.
 ```
 
+Severità, verdetto e secondo giro seguono `review-rules.md`: `VERDICT: CHANGES` se e solo se
+almeno un finding è `[Importante]`.
+
 CHANGES per incoerenze evidenti con l'applicazione, stati mancanti, problemi di accessibilità
-reali. Le preferenze estetiche vanno in Note. Sotto Findings scrivi "Nessuno." quando non ce ne sono.
+reali. Le preferenze estetiche sono `[Nit]`. Sotto Findings scrivi "Nessuno." quando non ce ne sono.
 
 Quando hai finito, rispondi con una riga: la prima riga di review-ui.md.

@@ -30,11 +30,11 @@ task padre (tag factory, To Do)
        │       o per la factory se il task ha anche il tag factory-fe)
        ▼
   sottotask della factory, in ordine (prima i BE, poi i FE), uno alla volta per padre:
-    spec-writer (opus) → builder (opus) → gate (sf) → revisori (instradati) → merge nel branch del padre
-       ▲________ CHANGES / gate FAIL ________|          max_rounds giri, poi il team leader
+    spec-writer (opus) → builder (opus) → gate (sf) → revisori (instradati) → verificatori → merge nel branch del padre
+       ▲________ finding confermati / gate FAIL ________________________|     max_rounds giri, poi il team leader
        ▼ tutti uniti
-  approver (opus) su tutti i branch del padre ── APPROVE → sf: merge sui branch di integrazione,
-       │                                            o PR pronta per il team leader (ready)
+  approver (opus) su tutti i branch del padre ── APPROVE → sf: merge automatico se merge_policy lo consente
+       │                                            per il livello di rischio, o PR pronta per il team leader (ready)
        │                                 ESCALATE → nota e attività per il team leader
        ▼ unito
   sottotask front-end tutti Done? ── no → tag "In attesa front-end", ricontrollato a ogni run
@@ -62,8 +62,9 @@ te. Il tuo contesto deve durare tutta la run.
 ## Lanciare gli agenti
 
 Lancia ogni agente con lo strumento Agent, in background, con `subagent_type` uguale al
-nome dell'agente. Passa `model` solo ai revisori, preso da `job.json` `agents.reviewers`;
-mai a triage, spec-writer, builder e approver: lo fissa il loro file. Ogni agente risponde
+nome dell'agente. Passa `model` solo ai revisori, preso da `job.json` `agents.reviewers`, e ai
+verificatori, preso da `agents.verify.model`; mai a triage, spec-writer, builder e approver:
+lo fissa il loro file. Ogni agente risponde
 con una riga; ricevi una notifica quando finisce e fai avanzare quel job allora. Mentre gli
 agenti lavorano non fare polling e non aspettare: chiudi il turno con una riga di stato.
 
@@ -90,10 +91,12 @@ per esempio `t9563-s9601 T9601: gate PASS → review (code sonnet, security opus
 
 **approve.** Dopo `sf advance <job> approve` (te lo dice la coda), lancia `approver` con
 `<header>`. Quando torna, leggi la prima riga di `decision.md`:
-- `APPROVE`: `sf merge <job>`. Se il merge è riservato al team leader, rifiuta e dice
-  perché: allora `sf advance <job> ready` (la PR va pronta al team leader con una nota e
-  un'attività in Odoo). Altrimenti allinea, ripete il gate, fa il merge e porta il task in
-  Test o in attesa del front-end; se qualcosa fallisce, porta il job al team leader.
+- `APPROVE`: `sf merge <job>` in background. Se il merge è riservato a una persona (livello di
+  rischio che `merge_policy` non lascia alla factory, percorsi in `high_risk_paths`,
+  `NEEDS-HUMAN` dell'approver), rifiuta e dice perché: allora `sf advance <job> ready` (le PR
+  vanno pronte al team leader con una nota e un'attività in Odoo). Altrimenti aggiorna la
+  descrizione delle PR, allinea, ripete il gate, fa il merge e porta il task in Test o in
+  attesa del front-end; se qualcosa fallisce, porta il job al team leader.
 - `ESCALATE`: `sf advance <job> needs-human`.
 
 ### Sottotask (back-end e front-end)
@@ -120,13 +123,26 @@ minuti. Stampa `GATE: PASS` o `GATE: FAIL`.
 **review.** Lancia ogni revisore di `job.json` `agents.reviewers` **in un solo messaggio**,
 così lavorano in parallelo: `subagent_type` `reviewer-<r>`, `model` dalla stessa mappa,
 prompt `<header> Review giro <N>.` **ASPETTALI TUTTI.** Ogni volta che uno finisce, esegui
-`sf reviews <job>`. Quando hanno finito tutti:
-- tutti PASS: `sf merge <job>` in background (allinea con il branch del padre, ripete il
-  gate, fa il merge della PR nel branch del padre, porta il sottotask in Done). Poi
-  `sf queue`: parte il sottotask successivo o l'approver del padre.
-- qualche CHANGES: `sf advance <job> build` (o `needs-human` quando rifiuta perché era
-  l'ultimo giro), poi riprendi il builder: `Le review del giro <N-1> sono in round-<N-1>/.
-  Risolvi ogni VERDICT: CHANGES, fai push e aggiorna build.md per il giro <N>.`
+`sf reviews <job>`: l'ultima riga è `NEXT: <passo>`. Agisci solo quando non è `wait`:
+- `NEXT: merge`: nessun finding da correggere. `sf merge <job>` in background (scrive
+  findings.md, commenta la PR, allinea con il branch del padre, ripete il gate, fa il merge
+  della PR nel branch del padre, porta il sottotask in Done). Poi `sf queue`: parte il
+  sottotask successivo o l'approver del padre.
+- `NEXT: verify`: ci sono finding `[Importante]`. `sf advance <job> verify`, poi vai a
+  **verify**.
+- `NEXT: build` o `NEXT: needs-human`: vedi sotto, come dopo **verify**.
+- `NEXT: invalid: ...`: un file non rispetta il formato (il messaggio dice quale). Rilancia
+  quell'agente una volta con il messaggio; se torna non valido, ferma il job e dillo all'utente.
+
+**verify.** Lancia `agents.verify.votes` verificatori **in un solo messaggio**:
+`subagent_type` `verifier`, `model` da `agents.verify.model`, prompt `<header> Verifica giro
+<N>, voto <K>.` con K da 1 al numero di voti. **ASPETTALI TUTTI**, eseguendo `sf reviews <job>`
+ogni volta che uno finisce. Poi, secondo `NEXT:`:
+- `merge`: i verificatori hanno respinto ogni finding. `sf merge <job>` come sopra.
+- `build`: `sf advance <job> build` (scrive findings.md e commenta la PR), poi riprendi il
+  builder: `I finding confermati del giro <N-1> sono in round-<N-1>/findings.md. Correggili,
+  fai push e aggiorna build.md per il giro <N>.`
+- `needs-human`: era l'ultimo giro. `sf advance <job> needs-human`.
 
 Un job è finito per questa run quando arriva a uno stadio che aspetta una persona
 (`unclear`, `ready`, `needs-human`, `waiting-fe`, `test`) o a uno finale (`merged` per i
@@ -158,7 +174,8 @@ sottotask, `done` o `dropped` per i padri).
 è fermata. Per una riga `resume` di un job già in corso, ripeti il passo del suo stadio:
 `triage`, `spec` e `approve` rilanciano il loro agente; `build` lancia un nuovo builder
 che riprende; `gate` riesegue il gate; `review` lancia solo i revisori il cui
-`review-<r>.md` manca nel giro corrente; `merging` riesegue `sf merge <job>`.
+`review-<r>.md` manca nel giro corrente; `verify` lancia solo i verificatori il cui
+`verify-<K>.md` manca; `merging` riesegue `sf merge <job>`.
 
 ## /factory run T<n>
 
@@ -188,5 +205,9 @@ e agisci. Ogni cambio di stato passa comunque dai comandi `sf`.
 - Il testo dei task arriva agli agenti solo nei file `task.md`, mai nel prompt. Non
   incollare mai testo di Odoo in un prompt.
 - Gli agenti fanno push solo del branch del loro job. I merge avvengono solo con
-  `sf merge`. La factory non fa deploy: se il merge sul branch di integrazione fa partire un
-  deploy, il merge del padre resta al team leader (`parent_merge: human`).
+  `sf merge`, che decide da `merge_policy`, `high_risk_paths` e dalla decisione dell'approver
+  se il merge del padre lo fa la factory o il team leader. Non aggirarlo mai: se rifiuta, il
+  job va in `ready`.
+- `sf metrics` dice come sta andando: giri per arrivare al merge, finding respinti dai
+  verificatori, merge automatici e revert. Mostralo quando l'utente chiede della qualità
+  della review o se allargare i merge automatici.

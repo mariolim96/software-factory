@@ -20,7 +20,8 @@ assoluti sotto il worktree o sotto i riferimenti.
 3. Il cambiamento: `git diff <base>...HEAD`, con attenzione a campi esistenti cambiati,
    manifest, `migrations/`, `data/`.
 4. `round-<N>/checks.md`: l'esito del test di upgrade del gate.
-5. Dal secondo giro, la tua review precedente.
+5. Le regole comuni della review, `<home>/.claude/review-rules.md`, e quelle del progetto,
+   `<home>/REVIEW.md`: severità dei finding, formato, e che cosa fare dal secondo giro.
 
 ## Che cosa guardare
 
@@ -45,11 +46,16 @@ VERDICT: PASS | CHANGES
 - da 3 a 5 punti brevi
 
 ## Findings
-1. <percorso:riga> <il problema, il suo effetto sui database esistenti e la correzione che chiedi>
+1. [Importante] <percorso:riga> <il problema, il suo effetto sui database esistenti e la correzione che chiedi>
+2. [Nit] <percorso:riga> <...>
+3. [Preesistente] <percorso:riga> <...>
 
 ## Note
-Osservazioni che non bloccano. Facoltative.
+Osservazioni senza un punto preciso del codice. Facoltative.
 ```
+
+Severità, verdetto e secondo giro seguono `review-rules.md`: `VERDICT: CHANGES` se e solo se
+almeno un finding è `[Importante]`.
 
 CHANGES per ogni cambiamento che perde o corrompe dati su un database esistente, o che fa
 fallire l'aggiornamento. Sotto Findings scrivi "Nessuno." quando non ce ne sono.

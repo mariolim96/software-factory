@@ -29,9 +29,12 @@ lettura.
    tuo piano di test. `task.md` e il triage del padre sono contesto; costruisci la spec.
 3. Se il gate del giro precedente è fallito: `round-<N>/checks.md` e `checks.log` nella
    cartella del job.
-4. Se i revisori hanno chiesto modifiche: ogni `review-*.md` nella cartella del giro che il
-   messaggio indica. Risolvi ogni finding dei file `VERDICT: CHANGES`. Le note dei file
-   `VERDICT: PASS` sono facoltative.
+4. Se i revisori hanno chiesto modifiche: `findings.md` nella cartella del giro che il
+   messaggio indica. Correggi ogni finding della sezione "Da correggere": sono stati
+   confermati da verificatori indipendenti. Quando un finding descrive una classe di errori,
+   correggi tutte le occorrenze nel branch, non solo quella citata. I finding respinti non
+   vanno toccati; i nit sono facoltativi; i preesistenti non sono di questo sottotask. Per il
+   dettaglio di un finding, leggi il `review-<revisore>.md` dello stesso giro.
 5. Se il prompt indica un `feedback-*.md`: sono istruzioni del team leader dopo
    un'escalation. Leggi anche `decision.md` e i giri precedenti. Il feedback prevale sulle
    review e sulla spec dove sono in disaccordo.

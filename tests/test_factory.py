@@ -114,11 +114,15 @@ def factory(tmp_path, monkeypatch):
         return FakeRes()
 
     monkeypatch.setattr(jobs_mod, "git", fake_git)
+    run_calls = []
+    monkeypatch.setattr(jobs_mod, "run", lambda cmd, cwd, check=True, input=None, env=None:
+                        run_calls.append((cmd, input)) or FakeRes())
     monkeypatch.setattr(jobs_mod, "cost_usd", lambda home, d: 0.0)
     monkeypatch.setattr(jobs_mod.taskdoc, "render", lambda odoo, tid, new_after=0: f"# T{tid}\n")
     f = jobs_mod.Factory(Home(tmp_path))
     f._odoo = FakeOdoo()
     f.git_calls = git_calls
+    f.run_calls = run_calls
     return f
 
 
@@ -210,11 +214,14 @@ def test_review_rounds_then_escalation(factory):
     job = factory.create(100)
     (factory.dir(job["id"]) / "triage.md").write_text(PLAN)
     job = factory.advance(factory.locked(job["id"]), "building")
+    factory.cfg["verify"] = {"votes": 0}
     sub = factory.locked(job["subs"][0])
     sub.update(stage="review", round=2, round_limit=2,
                agents={"reviewers": {"code": "haiku"}}, reviews={"code": "pending"})
     factory.round_dir(sub).mkdir(parents=True)
     (factory.round_dir(sub) / "review-code.md").write_text("VERDICT: CHANGES\n")
+    assert factory.review_next(sub).startswith("invalid")  # CHANGES without an Importante finding
+    (factory.round_dir(sub) / "review-code.md").write_text("VERDICT: CHANGES\n\n## Findings\n1. [Importante] x\n")
     with pytest.raises(Refused, match="go to needs-human"):
         factory.advance(sub, "build")
     sub = factory.advance(sub, "needs-human")
@@ -239,8 +246,10 @@ def test_human_merge_reasons_and_delivery(factory):
     (factory.dir(job["id"]) / "triage.md").write_text(PLAN)
     job = factory.advance(factory.locked(job["id"]), "building")
     job["repos"]["be"]["worktree"] = str(factory.home.root)
-    reasons = factory._human_merge_reasons(job)
-    assert any("parent_merge" in r for r in reasons) and any("alto rischio" in r for r in reasons)
+    tier, reasons = factory._human_merge_reasons(job)
+    assert tier == "high"  # a sub-task is high, and the approver wrote no RISK
+    assert any("RISK" in r for r in reasons) and any("merge_policy" in r for r in reasons)
+    assert any("sempre una persona" in r for r in reasons)
     job["stage"] = "merged"
     factory.deliver(job)
     assert job["stage"] == "waiting-fe"
@@ -250,6 +259,122 @@ def test_human_merge_reasons_and_delivery(factory):
     t = factory.odoo.tasks_db[100]
     assert job["stage"] == "test" and t["stage_id"][0] == STAGES["test"] and t["user_ids"] == [24]
     assert factory.odoo.tag_ids["waiting_fe"] not in t["tag_ids"]
+
+
+def _approved(factory, monkeypatch, decision, policy, files="src/App.java"):
+    factory.cfg["merge_policy"] = policy
+    job = factory.create(100)
+    (factory.dir(job["id"]) / "triage.md").write_text(PLAN.replace('"risk": "high", ', ""))
+    job = factory.advance(factory.locked(job["id"]), "building")
+    job["repos"]["be"].update(worktree=str(factory.home.root), pr=7, pr_url="u")
+    (factory.dir(job["id"]) / "decision.md").write_text(decision, encoding="utf-8")
+    monkeypatch.setattr(factory, "changed_files", lambda wt, base: files.split())
+    job["stage"] = "approve"
+    return job
+
+
+def test_merge_policy_lets_the_factory_merge_by_itself(factory, monkeypatch):
+    job = _approved(factory, monkeypatch, "APPROVE\nRISK: low\nNEEDS-HUMAN: no\n\n## Summary\n- ok\n\n"
+                    "## Come annullarla\nRevert, nessuna migrazione.\n\n## Problemi preesistenti\n- X lento\n",
+                    {"low": "auto", "medium": "auto", "high": "human"})
+    with pytest.raises(Refused, match="go to merging"):
+        factory.advance(job, "ready")
+    job = factory.advance(job, "merging")
+    assert job["merge"] == {"tier": "medium", "mode": "auto", "reasons": []}  # the triage said medium
+    body = json.loads(next(i for c, i in factory.run_calls if c[:2] == ["gh", "api"]))["body"]
+    assert "Livello **medium**" in body and "Revert, nessuna migrazione." in body and "## Test" in body
+    assert factory.odoo.notes[-1][1] == "problemi preesistenti"
+
+
+def test_always_human_paths_and_the_approver_flag(factory, monkeypatch):
+    allauto = {"low": "auto", "medium": "auto", "high": "auto"}
+    job = _approved(factory, monkeypatch, "APPROVE\nRISK: low\nNEEDS-HUMAN: no\n", allauto,
+                    files="src/db/changelog/011.sql")
+    tier, reasons = factory._human_merge_reasons(job)
+    assert len(reasons) == 1 and "011.sql" in reasons[0]
+    (factory.dir(job["id"]) / "decision.md").write_text("APPROVE\nRISK: high\nNEEDS-HUMAN: cambia i ruoli\n")
+    monkeypatch.setattr(factory, "changed_files", lambda wt, base: ["src/App.java"])
+    tier, reasons = factory._human_merge_reasons(job)
+    assert tier == "high" and reasons == ["l'approver chiede una persona: cambia i ruoli"]
+
+
+def test_legacy_parent_merge():
+    assert jobs_mod.merge_policy({"parent_merge": "human"})["low"] == "human"
+    assert jobs_mod.merge_policy({"parent_merge": "auto"}) == {"low": "auto", "medium": "auto", "high": "human"}
+
+
+def _in_review(factory, reviews):
+    job = factory.create(100)
+    (factory.dir(job["id"]) / "triage.md").write_text(PLAN)
+    job = factory.advance(factory.locked(job["id"]), "building")
+    sub = factory.locked(job["subs"][0])
+    sub.update(stage="review", round=1, round_limit=2, pr=5,
+               agents={"reviewers": {r: "sonnet" for r in reviews}}, reviews={r: "pending" for r in reviews})
+    factory.round_dir(sub).mkdir(parents=True)
+    for r, text in reviews.items():
+        (factory.round_dir(sub) / f"review-{r}.md").write_text(text, encoding="utf-8")
+    return sub
+
+
+CHANGES = ("VERDICT: CHANGES\n\n## Summary\n- x\n\n## Findings\n"
+           "1. [Importante] a.java:3 null non gestito\n   seconda riga\n2. [Nit] nome\n"
+           "3. [Preesistente] b.java:9 query lenta\n\n## Note\nniente\n")
+
+
+def test_findings_are_verified_before_the_builder_sees_them(factory):
+    sub = _in_review(factory, {"code": CHANGES, "security": "VERDICT: PASS\n\n## Findings\nNessuno.\n"})
+    assert factory.review_next(sub) == "verify"
+    with pytest.raises(Refused, match="verified first"):
+        factory.advance(sub, "build")
+    sub = factory.advance(sub, "verify")
+    assert sub["agents"]["verify"] == {"votes": 2, "model": "sonnet"}
+    assert factory.review_next(sub).startswith("wait")
+    rd = factory.round_dir(sub)
+    (rd / "verify-1.md").write_text("## Esiti\n- code-1: CONFERMATO, il null arriva da X\n", encoding="utf-8")
+    (rd / "verify-2.md").write_text("## Esiti\n- code-1: RESPINTO: X non è mai null\n", encoding="utf-8")
+    assert factory.review_next(sub) == "merge"  # confirm is 2 of 2 by default
+    sub = factory.advance(sub, "merging")
+    text = (rd / "findings.md").read_text(encoding="utf-8")
+    assert "## Respinti dai verificatori" in text and "X non è mai null" in text
+    assert sub["rounds_log"][0] == {"round": 1, "gate": None, "important": 1, "confirmed": 0, "rejected": 1,
+                                    "nit": 1, "preexisting": 1}
+    _cmd, body = next(c for c in factory.run_calls if c[0][:3] == ["gh", "pr", "comment"])
+    assert "giro 1" in body and "query lenta" in body
+
+
+def test_confirmed_findings_send_the_builder_back(factory):
+    sub = _in_review(factory, {"code": CHANGES})
+    sub = factory.advance(sub, "verify")
+    rd = factory.round_dir(sub)
+    for k in (1, 2):
+        (rd / f"verify-{k}.md").write_text("- `code-1`: **CONFERMATO** sì\n", encoding="utf-8")
+    assert factory.review_next(sub) == "build"
+    with pytest.raises(Refused, match="findings to fix: code-1"):
+        factory.advance(sub, "merging")
+    sub = factory.advance(sub, "build")
+    assert sub["round"] == 2
+    text = (factory.round_dir(sub, 1) / "findings.md").read_text(encoding="utf-8")
+    assert "**code-1** (2/2) a.java:3 null non gestito\n   seconda riga" in text
+
+
+def test_a_verifier_must_vote_on_every_finding(factory):
+    sub = _in_review(factory, {"code": CHANGES})
+    sub = factory.advance(sub, "verify")
+    rd = factory.round_dir(sub)
+    (rd / "verify-1.md").write_text("- code-1: CONFERMATO\n")
+    (rd / "verify-2.md").write_text("niente\n")
+    assert factory.review_next(sub).startswith("invalid: verify-2.md has no vote for code-1")
+
+
+def test_without_verification(factory):
+    factory.cfg["verify"] = {"votes": 0}
+    sub = _in_review(factory, {"code": "VERDICT: PASS\n\n## Findings\n1. [Nit] spazi\n"})
+    assert factory.review_next(sub) == "merge"
+    sub["reviews"] = {"code": "pending"}
+    (factory.round_dir(sub) / "review-code.md").write_text(CHANGES, encoding="utf-8")
+    assert factory.review_next(sub) == "build"
+    with pytest.raises(Refused, match="verification is off"):
+        factory.advance(sub, "verify")
 
 
 def test_reopened_by_pm_starts_a_new_cycle(factory):
@@ -330,4 +455,9 @@ def test_every_routed_reviewer_has_an_agent(tmp_path, monkeypatch, profile):
     assert named <= agents, f"{profile}: no agent for {named - agents}"
     assert (root / ".claude" / "profiles" / f"{profile}.md").exists()
     assert (root / "checks" / "be" / "check.sh").exists()
+    assert (root / ".claude" / "review-rules.md").exists() and (root / "REVIEW.md").exists()
+    assert (root / ".claude" / "agents" / "verifier.md").exists()
+    for p in (root / ".claude" / "agents").glob("reviewer-*.md"):
+        text = p.read_text(encoding="utf-8")
+        assert "review-rules.md" in text and "[Importante]" in text, p.name
     assert "agent_sets" not in cfg

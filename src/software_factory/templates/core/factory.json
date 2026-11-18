@@ -2,7 +2,8 @@
   "concurrency": 2,
   "max_rounds": 3,
   "merge_method": "merge",
-  "parent_merge": "human",
+  "merge_policy": { "low": "auto", "medium": "human", "high": "human" },
+  "verify": { "votes": 2, "confirm": 2, "model": "sonnet" },
   "odoo": {
     "url": "https://<instance>.odoo.com",
     "db": "<database>",

@@ -26,12 +26,13 @@ import json
 import re
 from pathlib import Path
 
+from . import review as reviewing
 from . import route as routing
 from . import taskdoc
 from .cost import cost_usd
 from .gate import run_gate
 from .odoo import Odoo, html_to_text
-from .util import Refused, first_line, gh, gh_json, git, header, now, require, section
+from .util import Refused, first_line, gh, gh_json, git, header, now, require, run, section
 
 try:
     import fcntl
@@ -55,14 +56,30 @@ SUB = {
     "spec": {"build"},
     "build": {"gate", "needs-human"},
     "gate": {"review", "build", "needs-human"},
-    "review": {"merging", "build", "needs-human"},
+    "review": {"verify", "merging", "build", "needs-human"},
+    "verify": {"merging", "build", "needs-human"},
     "merging": {"merged", "needs-human"},
     "needs-human": {"build", "merged"},
 }
 TERMINAL = {"done", "dropped", "merged"}
 RUNNING = {"parent": {"triage", "approve", "merging"},
-           "sub": {"spec", "build", "gate", "review", "merging"}}
+           "sub": {"spec", "build", "gate", "review", "verify", "merging"}}
 REPO_ORDER = {"be": 0, "fe": 1}
+RISK_RANK = {"low": 0, "medium": 1, "high": 2}
+
+
+def riskier(*levels):
+    return max((lv for lv in levels if lv in RISK_RANK), key=RISK_RANK.get, default="high")
+
+
+def merge_policy(cfg):
+    """Which risk tiers the factory merges into the integration branch by itself.
+    `merge_policy` wins; the older `parent_merge` reads as all-human or all-but-high."""
+    if "merge_policy" in cfg:
+        return cfg["merge_policy"]
+    if cfg.get("parent_merge") == "auto":
+        return {"low": "auto", "medium": "auto", "high": "human"}
+    return {"low": "human", "medium": "human", "high": "human"}
 
 
 def repo_order(keys):
@@ -284,9 +301,12 @@ class Factory:
                 self._escalate_parent(job)
             else:
                 require(line == "APPROVE", f"decision.md starts with {line!r}, not APPROVE")
-                reasons = self._human_merge_reasons(job)
+                tier, reasons = self._human_merge_reasons(job)
                 require((stage == "ready") == bool(reasons),
                         f"go to ready: {'; '.join(reasons)}" if reasons else "nothing requires a human merge: go to merging")
+                job["merge"] = {"tier": tier, "mode": "human" if reasons else "auto", "reasons": reasons}
+                self._describe_parent_prs(job, tier, reasons)
+                self._post_preexisting(job)
                 if stage == "ready":
                     self._ready_parent(job, reasons)
 
@@ -433,19 +453,70 @@ class Factory:
         return git(worktree, "diff", "--name-only", f"{base_ref}...HEAD").stdout.split()
 
     def _human_merge_reasons(self, job):
+        """(tier, reasons a person must merge). The tier is the highest of the triage's, the
+        sub-tasks', and the approver's; a path in high_risk_paths always wants a person."""
+        d = self.dir(job["id"]) / "decision.md"
+        h = header(d) if d.exists() else {}
+        approver = h.get("RISK", "").lower()
+        subs_risk = [self.load(s)["risk"] for s in job["subs"]]
+        tier = riskier(job.get("risk") or "medium", *subs_risk, approver or "high")
         reasons = []
-        if self.cfg.get("parent_merge", "human") != "auto":
-            reasons.append("il merge sul branch di integrazione è riservato al team leader (parent_merge)")
-        if job["risk"] == "high":
-            reasons.append("il triage ha valutato il rischio alto")
+        if not approver:
+            reasons.append("l'approver non ha indicato il rischio (RISK) in decision.md")
+        if merge_policy(self.cfg).get(tier, "human") != "auto":
+            reasons.append(f"rischio {tier}: merge_policy riserva questo livello al team leader")
+        needs = h.get("NEEDS-HUMAN", "no")
+        if needs.lower() not in {"", "no", "none", "nessuno"}:
+            reasons.append(f"l'approver chiede una persona: {needs}")
         for key in repo_order(job["repos"]):
             r = job["repos"][key]
             files = self.changed_files(r["worktree"], f"origin/{self.home.base(key)}")
             hot = routing.high_risk_files(self.home.rconf(key), files)
             if hot:
-                reasons.append(f"tocca file ad alto rischio in {key}: " + ", ".join(hot[:8])
+                reasons.append(f"tocca percorsi che vogliono sempre una persona in {key}: " + ", ".join(hot[:8])
                                + (" e altri" if len(hot) > 8 else ""))
-        return reasons
+        return tier, reasons
+
+    def _describe_parent_prs(self, job, tier, reasons):
+        """The parent PR body: what it does, its risk, how it was tested, how to revert it."""
+        d = self.dir(job["id"]) / "decision.md"
+
+        def sec(name):
+            return (section(d, name) or "") if d.exists() else ""
+
+        merge = ("automatico, dopo gate e review della factory" if not reasons
+                 else "team leader, perché " + "; ".join(reasons))
+        subs = [self.load(s) for s in job["subs"]]
+        for key in repo_order(job["repos"]):
+            r = job["repos"][key]
+            if not r.get("pr"):
+                continue
+            base = self.home.base(key)
+            body = "\n".join([
+                f"Task Odoo: {job['task_url']}", "",
+                "## Sottotask", *[f"- T{s['task']} {s['title']} (#{s['pr']})" for s in subs if s["repo"] == key], "",
+                "## Summary", sec("Summary"), "",
+                "## Rischio", f"Livello **{tier}**. Merge: {merge}.", "", sec("Rischio"), "",
+                "## Test", (f"Il gate della factory è passato su ogni sottotask e viene ripetuto dopo "
+                            f"l'allineamento con `{base}`, prima del merge."), "", sec("Criteri di accettazione"), "",
+                "## Come annullarla", sec("Come annullarla") or f"Revert del merge commit di questa PR su `{base}`.",
+            ])
+            res = run(["gh", "api", "-X", "PATCH", f"repos/{self.home.repos()[key]['github']}/pulls/{r['pr']}",
+                       "--input", "-"], cwd=self.home.repo_path(key), check=False, input=json.dumps({"body": body}))
+            if res.returncode != 0:
+                job.setdefault("log", []).append(f"{now()} descrizione della PR {key}#{r['pr']} non aggiornata")
+
+    def _post_preexisting(self, job):
+        """Problems the reviewers found that predate the branch: proposed to the team leader as new tasks."""
+        d = self.dir(job["id"]) / "decision.md"
+        text = ((section(d, "Problemi preesistenti") or "") if d.exists() else "").strip()
+        if not text or text.lower().startswith("nessuno") or job.get("preexisting_posted") == job["cycle"]:
+            return
+        note = ("I revisori hanno trovato problemi che esistevano già prima di questo task. Non bloccano il "
+                f"merge; l'approver li propone come task nuovi:\n\n{text}")
+        self.note(job, note, "problemi preesistenti")
+        self.odoo.activity(job["task"], "team_leader", f"Factory: problemi preesistenti trovati su T{job['task']}", note)
+        job["preexisting_posted"] = job["cycle"]
 
     def pr_links(self, job):
         return "\n".join(f"- {key}: {r['pr_url']}" for key, r in sorted(job["repos"].items()) if r.get("pr_url")) or "-"
@@ -595,19 +666,26 @@ class Factory:
                 self._fail_round(job, stage, f"Il gate è fallito nel giro {job['round']}, l'ultimo consentito. "
                                              f"Vedi round-{job['round']}/checks.md.")
 
-        elif old == "review":
-            self.sync_reviews(job)
-            missing = [r for r, v in job["reviews"].items() if v == "pending"]
-            require(not missing, f"round {job['round']} is missing reviews from: {', '.join(missing)}")
-            bad = [r for r, v in job["reviews"].items() if v == "invalid"]
-            require(not bad, f"the first line isn't a verdict in review-{bad[0]}.md" if bad else "")
-            changes = [r for r, v in job["reviews"].items() if v == "CHANGES"]
+        elif old in {"review", "verify"}:
+            findings = self._round_findings(job)
+            todo = [f for f in findings if f["severity"] == "Importante" and f.get("outcome") != "respinto"]
+            vcfg = reviewing.verify_cfg(self.cfg)
+            if stage == "verify":
+                require(vcfg["votes"], "verification is off (verify.votes is 0)")
+                require(todo, "no Importante finding to verify: go to merging")
+                job["agents"]["verify"] = {"votes": vcfg["votes"], "model": vcfg["model"]}
+                return
+            require(old == "verify" or not todo or not vcfg["votes"],
+                    "Importante findings must be verified first: go to verify")
             if stage == "merging":
-                require(not changes, f"reviews want CHANGES: {', '.join(changes)}")
+                require(not todo, "findings to fix: " + ", ".join(f["id"] for f in todo))
             else:
-                require(changes, "every review passed")
-                self._fail_round(job, stage, f"Giri di review esauriti. Restano CHANGES in round-{job['round']}/ "
-                                             f"da: {', '.join(changes)}.")
+                require(todo, "no Importante finding left: go to merging")
+            self._close_round(job, findings)
+            if stage != "merging":
+                self._fail_round(job, stage, f"Giri di review esauriti: restano i findings in "
+                                             f"round-{job['round']}/findings.md. Dopo {job['round']} giri "
+                                             "probabilmente serve un approccio diverso, non un'altra correzione.")
                 if stage == "build":
                     self.odoo.set_stage(job["task"], "in_progress")
 
@@ -633,6 +711,51 @@ class Factory:
 
         elif old == "merging" and stage == "needs-human":
             self._escalate_sub(job, None)  # merge() wrote decision.md
+
+    def _round_findings(self, job):
+        """Findings of the current round, with the verifiers' votes applied when in verify."""
+        self.sync_reviews(job)
+        missing = [r for r, v in job["reviews"].items() if v == "pending"]
+        require(not missing, f"round {job['round']} is missing reviews from: {', '.join(missing)}")
+        bad = [r for r, v in job["reviews"].items() if v == "invalid"]
+        require(not bad, f"review-{bad[0]}.md is invalid: the first line must be a VERDICT, CHANGES if and only if "
+                         "a finding is [Importante]; run that reviewer again" if bad else "")
+        rd = self.round_dir(job)
+        findings = reviewing.round_findings(rd, job["agents"]["reviewers"])
+        vcfg = reviewing.verify_cfg(self.cfg)
+        if job["stage"] == "verify":
+            gone = [p.name for p in reviewing.verify_files(rd, vcfg["votes"]) if not p.exists()]
+            require(not gone, f"waiting for {', '.join(gone)}")
+        if job["stage"] == "verify" or not vcfg["votes"]:
+            reviewing.apply_votes(findings, rd, vcfg)
+        return findings
+
+    def review_next(self, job):
+        """What the orchestrator does after a reviewer or a verifier returns."""
+        if job["stage"] not in {"review", "verify"}:
+            return f"none: {job['id']} is in {job['stage']}"
+        try:
+            findings = self._round_findings(job)
+        except Refused as e:
+            return f"wait: {e}" if "missing" in str(e) or "waiting" in str(e) else f"invalid: {e}"
+        todo = [f for f in findings if f["severity"] == "Importante" and f.get("outcome") != "respinto"]
+        if not todo:
+            return "merge"
+        if job["stage"] == "review" and reviewing.verify_cfg(self.cfg)["votes"]:
+            return "verify"
+        return "build" if job["round"] < job["round_limit"] else "needs-human"
+
+    def _close_round(self, job, findings):
+        """findings.md for the builder, the round's numbers, and a comment on the PR."""
+        n = job["round"]
+        text = reviewing.render(findings, n)
+        (self.round_dir(job) / "findings.md").write_text(text, encoding="utf-8")
+        job.setdefault("rounds_log", []).append({"round": n, "gate": job.get("gate"), **reviewing.stats(findings)})
+        if job.get("pr"):
+            verdicts = ", ".join(f"{r} {v}" for r, v in sorted(job["reviews"].items()))
+            body = f"**Review della factory, giro {n}** ({verdicts})\n\n" + text.split("\n", 2)[2]
+            run(["gh", "pr", "comment", str(job["pr"]), "--body-file", "-"],
+                cwd=self.home.repo_path(job["repo"]), check=False, input=body)
 
     def _next_round(self, job):
         job["round"] += 1
@@ -674,7 +797,13 @@ class Factory:
         for r in (job.get("agents") or {}).get("reviewers", {}):
             line = first_line(rd / f"review-{r}.md")
             m = re.fullmatch(r"VERDICT:\s*(PASS|CHANGES)", line or "")
-            job["reviews"][r] = m.group(1) if m else ("pending" if line is None else "invalid")
+            verdict = m.group(1) if m else ("pending" if line is None else "invalid")
+            if m:  # the verdict must agree with the findings: CHANGES iff an Importante one
+                important = any(f["severity"] == "Importante"
+                                for f in reviewing.parse_findings(rd / f"review-{r}.md", r))
+                if important != (verdict == "CHANGES"):
+                    verdict = "invalid"
+            job["reviews"][r] = verdict
         return job
 
     # ---- gate and merge -----------------------------------------------------
@@ -715,7 +844,7 @@ class Factory:
 
     def merge(self, job):
         """Sync with the base, gate again, merge the PR(s) through GitHub."""
-        if job["stage"] in {"review", "approve"}:
+        if job["stage"] in {"review", "verify", "approve"}:
             self.advance(job, "merging")
         require(job["stage"] == "merging", f"{job['id']} is in {job['stage']}, not merging")
         if job["kind"] == "sub":

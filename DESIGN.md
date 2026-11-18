@@ -39,8 +39,11 @@ con un nuovo ciclo: i file del ciclo precedente vanno in `cycle-<n>/` e il branc
 nuovo. Un padre in `ready` o `needs-human` torna a `triage` quando il team leader commenta, e
 il triage aggiunge i sottotask di correzione sullo stesso branch.
 
-**Sottotask**: `queued → spec → build → gate → review → merging → merged`, più
+**Sottotask**: `queued → spec → build → gate → review → verify → merging → merged`, più
 `needs-human`, da cui torna in `build` con il commento del team leader come `feedback-<k>.md`.
+`verify` c'è solo quando un revisore ha un finding `[Importante]`: i verificatori votano, e
+il sottotask torna in `build` se resta almeno un finding confermato, altrimenti va al merge.
+Lo stadio successivo lo dice `sf reviews` (`NEXT:`).
 
 Le mosse legali sono in `PARENT` e `SUB` di `jobs.py`. `sf advance` controlla i file che le
 giustificano. Esegue anche gli effetti su Odoo e GitHub: note, sottotask, stadi, tag,
@@ -71,14 +74,16 @@ I sottotask passano da To Do a In Progress, Review e Done, mai a Test.
   (`mail.mt_note`), che non mandano email ai follower, nemmeno ai clienti del portale.
 - **Gli agenti** non scrivono su Odoo. Leggono con tre strumenti MCP, elencati nel `tools:`
   di ciascuno. Il builder e i revisori non vedono Odoo.
-- **Il merge** sul branch di integrazione, quando può far partire un deploy, resta al team
-  leader (`parent_merge: human`). Gli resta comunque quando il rischio è alto o quando sono
-  toccati `high_risk_paths`.
+- **Il merge** sul branch di integrazione lo fa la factory solo per i livelli di rischio che
+  `merge_policy` le lascia. Il livello è il più alto tra quello del triage, dei sottotask e
+  dell'approver, quindi un agente da solo non può abbassarlo. I file in `high_risk_paths` e un
+  `NEEDS-HUMAN` dell'approver lo riservano sempre al team leader. Una PR non si unisce mai
+  senza che il gate sia ripassato dopo l'allineamento con il branch di integrazione.
 
 ## Concorrenza
 
 `concurrency` conta i job che stanno lavorando: padri in `triage`, `approve` o `merging`, e
-sottotask in `spec`, `build`, `gate`, `review` o `merging`. I sottotask dello stesso padre
+sottotask in `spec`, `build`, `gate`, `review`, `verify` o `merging`. I sottotask dello stesso padre
 vanno in sequenza, perché condividono il branch. Padri diversi vanno in parallelo.
 
 Ogni modifica a un job prende un lock non bloccante sul job. `sf gate` legge senza lock e

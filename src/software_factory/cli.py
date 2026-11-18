@@ -13,13 +13,15 @@
   sf merge <job>                  sync with the base, gate, merge the PR(s) (sub-task or parent)
   sf header <job>                 the line every agent prompt starts with
   sf task <job|task>              (re)write task.md, or print any project task as the agents see it
-  sf reviews <job>                refresh the review verdicts of the current round
+  sf reviews <job>                refresh the round's verdicts; prints NEXT: wait|verify|merge|build|needs-human
   sf summary [<job>...]           table of jobs: stage, round, PR, cost
+  sf metrics [--days N]           review and merge numbers: rounds to merge, findings rejected, auto merges, reverts
   sf mcp                          run the read-only Odoo MCP server (stdio)
 """
 
 import argparse
 import json
+import re
 import shutil
 import sys
 
@@ -94,6 +96,46 @@ def cmd_summary(f, ids):
     for r in rows:
         print("  ".join(c.ljust(w) for c, w in zip(r, widths)).rstrip())
     print(f"totale ${sum(j.get('cost_usd', 0) for j in jobs):.2f} (equivalente API, solo agenti della factory)")
+
+
+def cmd_metrics(f, days):
+    from .jobs import RISK_RANK
+    from .util import git
+    jobs = f.all()
+    subs = [j for j in jobs if j["kind"] == "sub" and j["stage"] == "merged"]
+    rounds = [j["round"] for j in subs]
+    logs = [r for j in jobs if j["kind"] == "sub" for r in j.get("rounds_log", [])]
+    tot = {k: sum(r.get(k, 0) for r in logs) for k in ("important", "confirmed", "rejected", "nit", "preexisting")}
+    parents = [j for j in jobs if j["kind"] == "parent" and j.get("merge")]
+    print(f"sottotask uniti: {len(subs)}")
+    if rounds:
+        print(f"  giri per arrivare al merge: media {sum(rounds) / len(rounds):.2f}, "
+              f"al primo giro {sum(r == 1 for r in rounds)}/{len(rounds)}")
+    print(f"findings Importante: {tot['important']} (confermati {tot['confirmed']}, "
+          f"respinti dai verificatori {tot['rejected']}); nit {tot['nit']}; preesistenti {tot['preexisting']}")
+    if tot["important"]:
+        print(f"  respinti: {100 * tot['rejected'] / tot['important']:.0f}% (rumore che il builder non ha visto)")
+    print(f"padri approvati: {len(parents)}")
+    for tier in sorted({p['merge']['tier'] for p in parents}, key=RISK_RANK.get):
+        group = [p for p in parents if p["merge"]["tier"] == tier]
+        auto = sum(p["merge"]["mode"] == "auto" for p in group)
+        print(f"  rischio {tier}: {auto} merge automatici, {len(group) - auto} dal team leader")
+    tasks = {j["task"] for j in jobs if j["kind"] == "parent"}
+    reverted = []
+    for key in f.home.repo_keys():
+        repo, base = f.home.repo_path(key), f.home.base(key)
+        git(repo, "fetch", "origin", base, check=False)
+        log = git(repo, "log", f"origin/{base}", f"--since={days}.days", "--format=%h %s",
+                  "--grep=^Revert", check=False).stdout
+        for line in log.splitlines():
+            m = re.search(r"\bT(\d+)\b", line)
+            if m and int(m.group(1)) in tasks:
+                reverted.append(f"{key} {line}")
+    merged_auto = sum(p["merge"]["mode"] == "auto" for p in parents)
+    print(f"revert di task della factory negli ultimi {days} giorni: {len(reverted)} "
+          f"(merge automatici in totale: {merged_auto})")
+    for r in reverted:
+        print(f"  {r}")
 
 
 def main(argv=None):
@@ -189,10 +231,16 @@ def main(argv=None):
                 print(taskdoc.render(f.odoo, int(arg.lstrip("tT"))))
         elif cmd == "reviews" and len(args) == 1:
             job = f.locked(f.resolve(args[0])["id"])
-            f.save(f.sync_reviews(job))
+            nxt = f.review_next(job)
+            f.save(job)
             print(json.dumps(job["reviews"]))
+            print(f"NEXT: {nxt}")
         elif cmd == "summary":
             cmd_summary(f, args)
+        elif cmd == "metrics":
+            p = argparse.ArgumentParser(prog="sf metrics")
+            p.add_argument("--days", type=int, default=90)
+            cmd_metrics(f, p.parse_args(args).days)
         else:
             print(f"sf: unknown command or arguments: {' '.join(argv)}\n\n{__doc__.strip()}", file=sys.stderr)
             return 2
