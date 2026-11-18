@@ -29,6 +29,16 @@ contratto non basta, il builder scrive BLOCKED: non inventa campi né endpoint.
 - Niente dipendenze npm nuove senza che la spec lo chieda: cambiano il bundle e la superficie
   d'attacco.
 
+## Test end-to-end
+
+Il gate non esegue gli E2E (Playwright o simili): richiedono tutto lo stack in piedi. Quindi,
+quando un sottotask cambia, sposta o toglie un elemento dell'interfaccia (testo, etichetta,
+ruolo, `data-testid`, rotta, passo di un flusso), il builder cerca negli E2E del repo gli spec che
+lo usano (`grep` sul testo, sul selettore, sulla rotta) e li aggiorna nello stesso sottotask, così
+che descrivano il comportamento nuovo. Se uno spec verifica proprio il comportamento che il task
+cambia, lo adegua al task, non lo cancella. In build.md elenca gli spec toccati, o scrive che
+nessuno spec usava gli elementi cambiati.
+
 ## Convenzioni Angular
 
 - Componenti standalone, `inject()` o costruttore come nel codice vicino, signals dove il progetto

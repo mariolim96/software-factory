@@ -25,6 +25,16 @@ conferma. Se il contratto non basta, il builder scrive BLOCKED: non inventa camp
   l'utente, non i dettagli interni.
 - Niente dipendenze npm nuove senza che la spec lo chieda.
 
+## Test end-to-end
+
+Il gate non esegue gli E2E (Playwright, Cypress): richiedono tutto lo stack in piedi. Quindi,
+quando un sottotask cambia, sposta o toglie un elemento dell'interfaccia (testo, etichetta,
+ruolo, `data-testid`, rotta, passo di un flusso), il builder cerca negli E2E del repo gli spec che
+lo usano (`grep` sul testo, sul selettore, sulla rotta) e li aggiorna nello stesso sottotask, così
+che descrivano il comportamento nuovo. Se uno spec verifica proprio il comportamento che il task
+cambia, lo adegua al task, non lo cancella. In build.md elenca gli spec toccati, o scrive che
+nessuno spec usava gli elementi cambiati.
+
 ## Convenzioni React
 
 - Componenti funzione e hook; stato locale con `useState`/`useReducer`, stato server con la

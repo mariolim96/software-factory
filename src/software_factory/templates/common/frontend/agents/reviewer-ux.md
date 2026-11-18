@@ -30,6 +30,11 @@ Comincia ogni comando Bash con `cd <worktree> && `, e dai a Read, Grep e Glob pe
   errori silenziosi o stati bloccati.
 - **Feedback**: conferma dopo un'azione, pulsanti disabilitati durante l'invio, niente doppi invii.
 - **Ruoli**: ogni ruolo vede solo ciò che può usare.
+- **Test end-to-end**: per ogni elemento dell'interfaccia che il branch cambia o toglie (testi,
+  etichette, ruoli, `data-testid`, rotte), cerca negli E2E del repo (`grep -rn` nella cartella degli
+  E2E che indicano PROJECT.md o il profilo) gli spec che lo usano ancora. Uno spec che cerca un
+  elemento non più presente, o verifica il comportamento vecchio, è un finding: va aggiornato in
+  questo sottotask.
 
 ## Scrivi review-ux.md
 
