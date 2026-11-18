@@ -32,7 +32,7 @@ in_node "npm ci --no-audit --no-fund"
 echo "== Build di produzione"
 in_node "npm run build -- --configuration production"
 
-if find "$APP/src" -name '*.spec.ts' | grep -q .; then
+if [[ -n "$(find "$APP/src" -name '*.spec.ts' -print -quit)" ]]; then
   echo "== Test unitari (Karma, Chrome headless)"
   in_node "npm test -- --watch=false --browsers=ChromeHeadless --no-progress"
 else
