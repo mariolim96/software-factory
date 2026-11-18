@@ -1,0 +1,39 @@
+{
+  "routing": {
+    "low": { "code": "haiku" },
+    "medium": { "code": "sonnet", "ui": "haiku" },
+    "high": { "code": "sonnet", "ui": "sonnet" }
+  },
+  "surface_reviewers": {
+    "security": { "fe-security": "opus" },
+    "ux": { "ux": "sonnet" },
+    "ui": { "ui": "sonnet" },
+    "api": { "contract": "sonnet" }
+  },
+  "path_reviewers": {
+    "contract": {
+      "model": "sonnet",
+      "paths": ["**/core/services/**", "**/core/models/**", "**/*api*.service.ts", "**/*.model.ts"]
+    },
+    "ui": {
+      "model": "haiku",
+      "paths": ["**/*.html", "**/*.scss", "**/*.css"]
+    },
+    "fe-security": {
+      "model": "opus",
+      "paths": ["**/core/auth/**", "**/core/interceptors/**", "**/*guard*.ts"],
+      "patterns": ["bypassSecurityTrust", "innerHTML", "outerHTML", "localStorage", "sessionStorage", "eval\\(", "new Function\\("]
+    }
+  },
+  "high_risk_paths": [
+    "**/core/auth/**",
+    "**/core/interceptors/**",
+    "**/*guard*.ts",
+    "**/package.json",
+    "**/package-lock.json",
+    "**/angular.json",
+    "**/Dockerfile",
+    "**/nginx/**"
+  ],
+  "protected_paths": [".github/**"]
+}

@@ -1,0 +1,32 @@
+{
+  "high_risk_paths": [
+    "**/db/changelog/**",
+    "**/security/**",
+    "**/*Security*.java",
+    "**/*Auth*.java",
+    "**/pom.xml",
+    "**/application*.properties",
+    "**/application*.yml"
+  ],
+  "surface_reviewers": {
+    "security": { "security": "opus" },
+    "data": { "data": "sonnet" },
+    "api": { "api": "sonnet" }
+  },
+  "path_reviewers": {
+    "security": {
+      "model": "opus",
+      "paths": ["**/security/**", "**/*Security*.java", "**/*Auth*.java", "**/*Keycloak*"],
+      "patterns": ["@PreAuthorize", "@Secured", "permitAll", "createNativeQuery", "jdbcTemplate\\.\\w+\\(.*\\+", "DSL\\.field\\(\".*\\+"]
+    },
+    "data": {
+      "model": "sonnet",
+      "paths": ["**/db/changelog/**", "**/*Repository*.java", "**/*Entity*.java", "**/adapter/out/**"],
+      "patterns": ["@Transactional", "@Query", "DSLContext"]
+    },
+    "api": {
+      "model": "sonnet",
+      "paths": ["**/src/main/resources/api/**", "**/*Controller*.java", "**/adapter/in/web/**"]
+    }
+  }
+}

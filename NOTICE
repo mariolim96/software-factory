@@ -1,0 +1,12 @@
+This project is derived from "Software Factory for Claude Code (v2)" by ZazenCodes,
+https://github.com/zazencodes/zazencodes-season-3/tree/main/src/software-factory-claude-code-v2,
+licensed under the GNU General Public License v3.
+
+Changes from the original: the queue is Odoo Project tasks instead of GitHub issues; a triage
+step splits each task into back-end sub-tasks (built by the factory) and front-end sub-tasks
+(for people, with the API contract); sub-tasks merge into a parent branch, which merges into
+the integration branch after a whole-branch approval; the factory's state machine, gate and
+Odoo client are a Python package (`sf`); stack profiles (Java/Maven, Odoo) provide the gate
+and the reviewers; agent prompts are in Italian.
+
+This project is distributed under the same license, GPLv3 (see LICENSE).

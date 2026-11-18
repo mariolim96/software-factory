@@ -1,0 +1,42 @@
+{
+  "odoo_target": { "version": "19.0", "edition": "community", "image": "odoo:19" },
+  "references": [
+    { "name": "odoo", "url": "https://github.com/odoo/odoo.git", "ref": "19.0" }
+  ],
+  "protected_paths": [".github/**", ".pre-commit-config.yaml", ".pylintrc", ".pylintrc-mandatory", ".ruff.toml"],
+  "high_risk_paths": [
+    "**/security/**",
+    "**/migrations/**",
+    "**/upgrades/**",
+    "account*/**",
+    "*_account*/**",
+    "l10n_*/**",
+    "**/__manifest__.py"
+  ],
+  "routing": {
+    "low": { "code": "haiku", "orm": "haiku" },
+    "medium": { "code": "sonnet", "orm": "sonnet" },
+    "high": { "code": "sonnet", "orm": "sonnet" }
+  },
+  "surface_reviewers": {
+    "security": { "security": "opus" },
+    "migrations": { "migrations": "sonnet" },
+    "views": { "views": "haiku" }
+  },
+  "path_reviewers": {
+    "security": {
+      "model": "opus",
+      "paths": ["**/security/**", "**/controllers/**", "**/ir.model.access.csv"],
+      "patterns": ["\\.sudo\\(", "cr\\.execute\\(", "auth=['\"](public|none)", "csrf=False", "with_user\\(", "SQL\\("]
+    },
+    "migrations": {
+      "model": "sonnet",
+      "paths": ["**/migrations/**", "**/upgrades/**", "**/__manifest__.py", "**/data/**"],
+      "patterns": ["noupdate", "_rename_", "oldname"]
+    },
+    "views": {
+      "model": "haiku",
+      "paths": ["**/views/**", "**/report/**", "**/wizard/*.xml", "**/static/src/**/*.xml"]
+    }
+  }
+}

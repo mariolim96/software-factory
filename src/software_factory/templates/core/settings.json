@@ -1,0 +1,20 @@
+{
+  "enabledMcpjsonServers": ["odoo"],
+  "permissions": {
+    "allow": [
+      "Read", "Glob", "Grep", "Edit", "Write",
+      "Bash(sf:*)", "Bash(cd:*)", "Bash(git:*)", "Bash(gh pr create:*)", "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)", "Bash(gh pr diff:*)", "Bash(bash:*)", "Bash(ls:*)", "Bash(cat:*)",
+      "Bash(head:*)", "Bash(tail:*)", "Bash(grep:*)", "Bash(find:*)", "Bash(wc:*)", "Bash(sed -n:*)",
+      "Bash(docker:*)", "Bash(npx:*)", "Bash(./mvnw:*)", "Bash(mvn:*)", "Bash(python3:*)",
+      "mcp__odoo__get_task", "mcp__odoo__search_tasks", "mcp__odoo__list_subtasks"
+    ],
+    "deny": [
+      "Read({{CREDENTIALS}})", "Read(**/.odoo-*.json)", "Bash(cat {{CREDENTIALS}}:*)",
+      "Edit({{REFS}}/**)", "Write({{REFS}}/**)",
+      "Bash(gh pr merge:*)", "Bash(gh pr ready:*)", "Bash(gh pr close:*)", "Bash(gh repo:*)", "Bash(gh api:*)",
+      "Bash(git push --force:*)", "Bash(git push -f:*)", "Bash(git push origin --delete:*)",
+      "Bash(git push origin main:*)", "Bash(git push origin develop:*)"
+    ]
+  }
+}
