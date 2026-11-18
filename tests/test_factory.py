@@ -461,3 +461,57 @@ def test_every_routed_reviewer_has_an_agent(tmp_path, monkeypatch, profile):
         text = p.read_text(encoding="utf-8")
         assert "review-rules.md" in text and "[Importante]" in text, p.name
     assert "agent_sets" not in cfg
+
+
+def _transcript(cfg_dir, home, session, agent, job_dir, agent_type, times):
+    d = cfg_dir / "projects" / __import__("re").sub(r"[^A-Za-z0-9]", "-", str(home)) / session / "subagents"
+    d.mkdir(parents=True, exist_ok=True)
+    lines = [{"type": "user", "timestamp": times[0],
+              "message": {"role": "user", "content": f"Job: x. Job folder: {job_dir}/. Giro 1."}}]
+    lines += [{"type": "assistant", "timestamp": t, "message": {"id": t, "role": "assistant", "content": []}}
+              for t in times[1:]]
+    (d / f"agent-{agent}.jsonl").write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    (d / f"agent-{agent}.meta.json").write_text(json.dumps({"agentType": agent_type, "description": f"{agent_type} T1"}))
+
+
+def test_hours_per_ticket(factory, tmp_path, monkeypatch):
+    from software_factory import hours
+    cfg_dir = tmp_path / "claude-config"
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(cfg_dir))
+    job = factory.create(100)
+    (factory.dir(job["id"]) / "triage.md").write_text(PLAN)
+    _transcript(cfg_dir, factory.home.root, "s1", "a1", factory.dir(job["id"]), "triage",
+                ["2026-11-18T09:00:00Z", "2026-11-18T09:10:00Z"])
+    job = factory.advance(factory.locked(job["id"]), "building")
+    assert [w["what"] for w in job["work"]] == ["triage"]
+    sub = factory.load(job["subs"][0])
+    # two reviewers in parallel count once in the hours of work; a resumed agent is two intervals
+    _transcript(cfg_dir, factory.home.root, "s1", "b1", factory.dir(sub["id"]), "builder",
+                ["2026-11-18T10:00:00Z", "2026-11-18T10:30:00Z", "2026-11-18T12:00:00Z", "2026-11-18T12:15:00Z"])
+    for a in ("r1", "r2"):
+        _transcript(cfg_dir, factory.home.root, "s1", a, factory.dir(sub["id"]), "reviewer-code",
+                    ["2026-11-18T11:00:00Z", "2026-11-18T11:20:00Z"])
+    sub["work"] = [{"key": "gate:x", "what": "gate", "note": "giro 1: PASS",
+                    "start": "2026-11-18T10:30:00Z", "end": "2026-11-18T10:45:00Z"}]
+    factory.save(sub)
+    out = hours.report(factory, ["100"])
+    assert out[0].startswith("T100 ")
+    assert sum(1 for line in out if "builder" in line) == 2
+    # 10 triage + 30 builder + 15 gate + 20 reviewers + 15 builder = 1:30; agent hours add the second reviewer
+    assert "  ore di lavoro 1:30 (ore agente 1:50)" in out
+    assert out[-1] == "totale 1:30 ore di lavoro su 1 ticket (ore agente 1:50)"
+    since = hours.parse("2026-11-18T11:30:00Z")
+    assert hours.report(factory, [], since, totals_only=True)[1] == "  ore di lavoro 0:15 (ore agente 0:15)"
+
+
+def test_gate_run_is_logged(factory, monkeypatch):
+    monkeypatch.setattr(jobs_mod, "run_gate", lambda *a, **k: "PASS")
+    job = factory.create(100)
+    (factory.dir(job["id"]) / "triage.md").write_text(PLAN)
+    job = factory.advance(factory.locked(job["id"]), "building")
+    sub = factory.load(job["subs"][0])
+    sub["stage"], sub["round"] = "gate", 1
+    factory.save(sub)
+    factory.gate(sub["id"])
+    work = factory.load(sub["id"])["work"]
+    assert [(w["what"], w["note"]) for w in work] == [("gate", "giro 1: PASS")]

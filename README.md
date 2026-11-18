@@ -106,6 +106,29 @@ il minimo di tempo umano che non aumenta revert e incidenti.
 - **Misure.** `sf metrics`: giri per arrivare al merge, finding respinti, merge automatici per
   livello, revert dei task della factory. Servono a decidere se allargare `merge_policy`.
 
+## Ore
+
+`sf log` elenca, per ogni ticket, gli intervalli di lavoro della factory, con ora di inizio e di
+fine, agente o gate, sottotask e durata, e chiude con le ore del ticket e il totale:
+
+```
+T10327  E2E-002: allineare il caso del checkbox ...  (building)
+  2026-11-18 17:24–17:25   0:01  T10334  spec-writer          Spec T10334
+  2026-11-18 17:25–17:34   0:09  T10334  builder              Build T10334 round 1
+  ore di lavoro 0:11 (ore agente 0:11)
+```
+
+- **Ore di lavoro**: l'unione degli intervalli, quindi i revisori in parallelo contano una volta
+  sola. **Ore agente**: la somma.
+- Gli intervalli degli agenti vengono dalle trascrizioni di Claude Code (dal primo all'ultimo
+  messaggio; una pausa di più di 45 minuti li spezza). Ogni `sf advance` li copia in `job.json`,
+  perché Claude Code cancella le trascrizioni vecchie. Le esecuzioni di `sf gate` e i gate prima
+  del merge li registra `sf` stesso.
+- Non conta il tempo dell'orchestratore tra un agente e l'altro, né le attese di persone.
+- Filtri: `sf log T<n>` (un ticket con i suoi sottotask), `--days N`, `--since AAAA-MM-GG`,
+  `--totals` (solo i totali). Gli orari sono nel fuso `timezone` di `factory.json`, o in quello
+  della macchina.
+
 ```json
 "merge_policy": { "low": "auto", "medium": "human", "high": "human" },
 "verify": { "votes": 2, "confirm": 2, "model": "sonnet" }
@@ -119,7 +142,7 @@ alla factory tranne il rischio alto.
 ```
 /factory run          svuota la coda e riprende i job a metà
 /factory run T<n>     un solo task
-/factory <altro>      domande su job, costi, attese
+/factory <altro>      domande su job, costi, ore, attese
 ```
 
 Le decisioni passano da Odoo, non dal terminale. Il PM e il team leader rispondono con un

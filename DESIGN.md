@@ -95,6 +95,16 @@ Come nel riferimento: si leggono le trascrizioni dei subagenti di Claude Code ch
 `Job folder: <cartella>/`. È un formato non documentato: se cambia, il costo va a zero, ma
 la factory continua a funzionare.
 
+## Ore
+
+Dalle stesse trascrizioni: ogni messaggio ha un `timestamp`, e accanto a ogni trascrizione
+`agent-<id>.meta.json` dice il tipo di agente. Un agente lavora dal primo all'ultimo messaggio;
+una pausa di più di 45 minuti (un agente ripreso dopo) apre un intervallo nuovo, mentre un
+gate dentro l'agente (`sf check`) resta sotto la soglia. `sf advance` copia gli intervalli in
+`job["work"]` con una chiave per agente e intervallo, così sopravvivono alla pulizia delle
+trascrizioni; `sf gate` e `sf merge` aggiungono le loro esecuzioni del gate. `sf log` unisce
+quello che è salvato con quello che le trascrizioni mostrano in quel momento, senza scrivere.
+
 ## Limiti noti
 
 - Le regole `permissions` di Claude Code valgono per tutta la sessione, non per il singolo

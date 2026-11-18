@@ -26,13 +26,24 @@ import json
 import re
 from pathlib import Path
 
+from . import hours, taskdoc
 from . import review as reviewing
 from . import route as routing
-from . import taskdoc
 from .cost import cost_usd
 from .gate import run_gate
 from .odoo import Odoo, html_to_text
-from .util import Refused, first_line, gh, gh_json, git, header, now, require, run, section
+from .util import (
+    Refused,
+    first_line,
+    gh,
+    gh_json,
+    git,
+    header,
+    now,
+    require,
+    run,
+    section,
+)
 
 try:
     import fcntl
@@ -242,8 +253,16 @@ class Factory:
         job["ended"] = now() if stage in TERMINAL else None
         job.setdefault("log", []).append(f"{now()} {old} → {stage}")
         job["cost_usd"] = cost_usd(self.home, self.dir(job["id"]))
+        job["work"] = hours.merge_work(job.get("work"), hours.agent_work(self.home, self.dir(job["id"])))
         self.save(job)
         return job
+
+    @staticmethod
+    def _worked(job, what, note, start):
+        """Record a run of the checks done by sf itself (no agent) for `sf log`."""
+        end = now()
+        job.setdefault("work", []).append({"key": f"{what}:{start}:{note}", "what": what, "note": note,
+                                           "start": start, "end": end})
 
     # -- parent
 
@@ -812,9 +831,11 @@ class Factory:
         """Run the gate without holding the job: it takes minutes and `sf queue` must stay usable."""
         job = self.load(job_id)
         require(job["kind"] == "sub" and job["stage"] == "gate", f"{job_id} isn't a sub-task in gate")
+        start = now()
         verdict = run_gate(self.home, job["repo"], job["id"], job["worktree"], job["base"], self.round_dir(job), "checks")
         job = self.locked(job_id)
         job["gate"] = verdict
+        self._worked(job, "gate", f"giro {job['round']}: {verdict}", start)
         self.save(job)
         return verdict
 
@@ -829,8 +850,10 @@ class Factory:
             git(wt, "merge", "--abort", check=False)
             return f"Il branch di {key} è in conflitto con {base}:\n\n```\n{merged.stdout.strip()}\n```"
         name = f"merge-checks-{key}" if out.name == "merge" else "merge-checks"
+        start = now()
         verdict = run_gate(self.home, key, f"{self.dir(job['id']).name}-{key}", wt, base, out, name,
                            f"allineato con {base} prima del merge")
+        self._worked(job, "gate", f"prima del merge {key}: {verdict}", start)
         if verdict != "PASS":
             return f"Il gate di {key} è fallito dopo l'allineamento con {base}: vedi {out}/{name}.md."
         try:

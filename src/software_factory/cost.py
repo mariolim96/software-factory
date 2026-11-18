@@ -26,24 +26,33 @@ def _prompt_text(line):
     return " ".join(b.get("text", "") for b in content if isinstance(b, dict))
 
 
-def cost_usd(home, job_dir):
+def job_transcripts(home, job_dir):
+    """(path, lines) of every subagent transcript whose prompt names the job folder."""
     needle = f"Job folder: {job_dir}/"
-    prices = home.get("prices_usd_per_mtok", {})
-    total = 0.0
     for path in transcripts_dir(home).glob("*/subagents/agent-*.jsonl"):
         try:
             with path.open(encoding="utf-8") as f:
                 first = f.readline()
                 if not first or needle not in _prompt_text(first):
                     continue
-                usage = {}
-                for line in f:
-                    entry = json.loads(line)
-                    msg = entry.get("message")
-                    if entry.get("type") == "assistant" and isinstance(msg, dict) and msg.get("usage"):
-                        usage[msg["id"]] = (msg["model"], msg["usage"])
+                yield path, [first, *f]
         except (OSError, ValueError, KeyError):
             continue
+
+
+def cost_usd(home, job_dir):
+    prices = home.get("prices_usd_per_mtok", {})
+    total = 0.0
+    for _path, lines in job_transcripts(home, job_dir):
+        usage = {}
+        for line in lines:
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue
+            msg = entry.get("message")
+            if entry.get("type") == "assistant" and isinstance(msg, dict) and msg.get("usage"):
+                usage[msg["id"]] = (msg.get("model"), msg["usage"])
         for model, u in usage.values():
             p = prices.get(model)
             if not p:

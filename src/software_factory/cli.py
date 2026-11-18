@@ -16,6 +16,8 @@
   sf reviews <job>                refresh the round's verdicts; prints NEXT: wait|verify|merge|build|needs-human
   sf summary [<job>...]           table of jobs: stage, round, PR, cost
   sf metrics [--days N]           review and merge numbers: rounds to merge, findings rejected, auto merges, reverts
+  sf log [<task|job>...] [--days N | --since YYYY-MM-DD] [--totals]
+                                  hours of work per ticket: every agent and gate run, with totals
   sf mcp                          run the read-only Odoo MCP server (stdio)
 """
 
@@ -24,6 +26,7 @@ import json
 import re
 import shutil
 import sys
+from datetime import UTC
 
 from .config import ConfigError, Home
 from .odoo import OdooError
@@ -138,6 +141,27 @@ def cmd_metrics(f, days):
         print(f"  {r}")
 
 
+def cmd_log(f, args):
+    from datetime import datetime, timedelta
+
+    from .hours import report, tz
+    p = argparse.ArgumentParser(prog="sf log")
+    p.add_argument("jobs", nargs="*")
+    p.add_argument("--days", type=int)
+    p.add_argument("--since", help="YYYY-MM-DD")
+    p.add_argument("--totals", action="store_true", help="solo il totale di ogni ticket")
+    a = p.parse_args(args)
+    since = None
+    if a.since:
+        try:
+            since = datetime.strptime(a.since, "%Y-%m-%d").replace(tzinfo=tz(f.home))
+        except ValueError:
+            raise Refused(f"--since {a.since}: usa YYYY-MM-DD") from None
+    elif a.days:
+        since = datetime.now(UTC) - timedelta(days=a.days)
+    print("\n".join(report(f, a.jobs, since, a.totals)))
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if not argv or argv[0] in {"-h", "--help", "help"}:
@@ -241,6 +265,8 @@ def main(argv=None):
             p = argparse.ArgumentParser(prog="sf metrics")
             p.add_argument("--days", type=int, default=90)
             cmd_metrics(f, p.parse_args(args).days)
+        elif cmd == "log":
+            cmd_log(f, args)
         else:
             print(f"sf: unknown command or arguments: {' '.join(argv)}\n\n{__doc__.strip()}", file=sys.stderr)
             return 2

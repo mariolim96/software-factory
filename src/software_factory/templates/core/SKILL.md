@@ -18,7 +18,7 @@ eseguito da lì.
 ```
 /factory run          svuota la coda: ogni task in coda, `concurrency` alla volta; riprende anche i job a metà
 /factory run T<n>     un solo task ora
-/factory <altro>      parla con la factory: stato, costi, perché un job è fermo, che cosa aspetta qualcuno
+/factory <altro>      parla con la factory: stato, costi, ore, perché un job è fermo, che cosa aspetta qualcuno
 ```
 
 ## Il flusso
@@ -190,6 +190,8 @@ e agisci. Ogni cambio di stato passa comunque dai comandi `sf`.
 - **Una domanda** (stato, costi, perché un job è fermo, che cosa ha detto un revisore):
   rispondi da `sf summary`, `job.json` e dai file del job. Qui puoi leggere un file per
   intero quando la risposta è lì.
+- **Le ore** ("factory log", quanto ci ha messo, ore per ticket): stampa `sf log` così com'è,
+  con `--days N`, `--since AAAA-MM-GG`, `--totals` o i numeri dei task se l'utente restringe.
 - **Che cosa aspetta qualcuno**: `sf queue`, e per ogni riga `wait` spiega che cosa manca.
 - **Istruzioni, correzioni, decisioni**: la factory le prende solo da Odoo, come commenti
   del PM o del team leader sul task, perché lì l'autore è verificato. Di' all'utente di
