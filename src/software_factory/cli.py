@@ -20,6 +20,7 @@
 
 import argparse
 import json
+import shutil
 import sys
 
 from .config import ConfigError, Home
@@ -59,6 +60,14 @@ def cmd_doctor(f):
     for k, v in o.users.items():
         check(f"utente {k}", lambda v=v: o.call("res.users", "read", ids=[v], fields=["name"])[0]["name"])
     check("gh", lambda: run(["gh", "auth", "status"], cwd=f.home.root).returncode == 0 and "autenticato")
+
+    def mcp_server():
+        from . import mcp_server  # noqa: F401  (fails when the mcp library changed its API)
+        cfg = json.loads((f.home.root / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]["odoo"]
+        if not shutil.which(cfg["command"]):
+            raise Exception(f"{cfg['command']} non è eseguibile: rilancia sf init")
+        return cfg["command"]
+    check("server MCP odoo", mcp_server)
     for key in f.home.repo_keys():
         def present(path, hint):
             if not path.exists():

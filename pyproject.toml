@@ -5,7 +5,7 @@ description = "A software factory for Claude Code that works through Odoo Projec
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
 requires-python = ">=3.11"
-dependencies = ["mcp>=1.2"]
+dependencies = ["mcp>=1.2,<2"]
 
 [project.scripts]
 sf = "software_factory.cli:main"

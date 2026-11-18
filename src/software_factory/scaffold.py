@@ -98,11 +98,12 @@ def init(target, profile, repo, base, key="be"):
         settings.write_text(text.replace("{{REFS}}", refs).replace("{{CREDENTIALS}}", creds), encoding="utf-8")
         done.append(".claude/settings.json creato")
 
-    mcp = root / ".mcp.json"
-    if not mcp.exists():
-        mcp.write_text(json.dumps({"mcpServers": {"odoo": {
-            "command": "sf", "args": ["mcp"], "env": {"SF_HOME": str(root)}}}}, indent=2) + "\n")
-        done.append(".mcp.json creato")
+    # Rewritten every time, with sf's absolute path: Claude Code may start the server from a
+    # shell where ~/.local/bin isn't on PATH, and the path changes when sf is reinstalled.
+    sf = shutil.which("sf") or "sf"
+    (root / ".mcp.json").write_text(json.dumps({"mcpServers": {"odoo": {
+        "command": sf, "args": ["mcp"], "env": {"SF_HOME": str(root)}}}}, indent=2) + "\n")
+    done.append(f".mcp.json: server odoo con {sf}")
 
     for src, dst in (("PROJECT.md", "PROJECT.md"), ("gitignore", ".gitignore")):
         if not (root / dst).exists():
