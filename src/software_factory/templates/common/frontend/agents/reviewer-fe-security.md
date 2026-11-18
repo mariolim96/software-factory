@@ -21,7 +21,7 @@ Comincia ogni comando Bash con `cd <worktree> && `, e dai a Read, Grep e Glob pe
 
 ## Che cosa guardare
 
-- **XSS**: niente `innerHTML`, `bypassSecurityTrust*`, URL costruiti da dati del server senza
+- **XSS**: niente `innerHTML`, `bypassSecurityTrust*` (Angular), `dangerouslySetInnerHTML` (React), URL costruiti da dati del server senza
   controllo; i dati si rendono con l'interpolazione.
 - **Token e sessione**: nessun token o dato personale in storage, log o URL oltre a ciò che il
   progetto fa già; interceptor che non mandano il token a domini esterni.

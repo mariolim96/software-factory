@@ -45,15 +45,20 @@ task padre: tag factory, To Do
 | Orchestratore | skill `factory` | La sessione Claude Code che lancia gli agenti e chiama `sf`. |
 | Agenti | `templates/core/agents`, `templates/profiles/<p>/agents` | Un file per ruolo; ognuno scrive un file e risponde con una riga. |
 | Odoo MCP | `sf mcp` | Lettura di Odoo per gli agenti, limitata al progetto. Gli agenti non scrivono mai su Odoo. |
-| Profili | `java-maven`, `odoo`, `angular` | Gate, revisori e regole di uno stack. Un progetto ha uno o più repo (`be`, `fe`), ognuno con il suo profilo: `sf add-repo`. |
+| Profili | `java-maven`, `python`, `node`, `odoo` (back-end); `angular`, `react` (front-end) | Gate, revisori e regole di uno stack. Un progetto ha uno o più repo (`be`, `fe`), ognuno con il suo profilo: `sf add-repo`. |
 | Home | una cartella per progetto, fuori dal repo | `factory.json`, `checks/`, `PROJECT.md`, clone del repo, worktree, job. |
 
 Agenti: `triage` (fable), `spec-writer`, `builder` e `approver` (opus), e i revisori, instradati
 dal rischio, dalle superfici e dai file toccati:
 - comuni: `code` e `security`;
-- `java-maven`: `data` e `api`;
+- back-end (`java-maven`, `python`, `node`): `data` e `api`, con regole specifiche per Java;
 - `odoo`: `orm`, `migrations` e `views`;
-- `angular`: `ui`, `ux`, `contract` e `fe-security`.
+- front-end (`angular`, `react`): `ui`, `ux`, `contract` e `fe-security`.
+
+I controlli di ogni profilo girano in container con la versione di Java, Node o Python del
+progetto. Python e Node riconoscono da soli il gestore di pacchetti (uv, poetry, pip; npm, pnpm,
+yarn) e le migrazioni (Alembic, Django, Prisma); per il resto si impostano variabili in cima a
+`checks/check.sh` e `checks/upgrade.sh`.
 
 ## Installazione
 

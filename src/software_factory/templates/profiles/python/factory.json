@@ -1,0 +1,43 @@
+{
+  "agent_sets": ["backend"],
+  "routing": {
+    "low": { "code": "haiku" },
+    "medium": { "code": "sonnet" },
+    "high": { "code": "sonnet" }
+  },
+  "surface_reviewers": {
+    "security": { "security": "opus" },
+    "data": { "data": "sonnet" },
+    "api": { "api": "sonnet" }
+  },
+  "path_reviewers": {
+    "security": {
+      "model": "opus",
+      "paths": ["**/auth/**", "**/security/**", "**/permissions*.py", "**/middleware*.py", "**/settings*.py"],
+      "patterns": ["\\.execute\\(f[\"']", "\\.execute\\(.*%", "text\\(f[\"']", "\\.raw\\(", "subprocess", "os\\.system", "eval\\(", "pickle\\.loads", "yaml\\.load\\(", "verify=False", "AllowAny", "csrf_exempt"]
+    },
+    "data": {
+      "model": "sonnet",
+      "paths": ["**/migrations/**", "**/alembic/**", "**/models.py", "**/models/**", "**/repositories/**", "**/repository*.py", "**/crud*.py"],
+      "patterns": ["session\\.(query|execute|commit)", "\\.objects\\.", "select_related", "prefetch_related", "transaction\\.atomic"]
+    },
+    "api": {
+      "model": "sonnet",
+      "paths": ["**/routers/**", "**/routes/**", "**/api/**", "**/views.py", "**/views/**", "**/serializers*.py", "**/schemas/**", "**/schemas.py", "**/openapi*"]
+    }
+  },
+  "high_risk_paths": [
+    "**/migrations/**",
+    "**/alembic/**",
+    "**/auth/**",
+    "**/security/**",
+    "**/permissions*.py",
+    "**/settings*.py",
+    "**/pyproject.toml",
+    "**/requirements*.txt",
+    "**/uv.lock",
+    "**/poetry.lock",
+    "**/Dockerfile"
+  ],
+  "protected_paths": [".github/**", ".pre-commit-config.yaml"]
+}

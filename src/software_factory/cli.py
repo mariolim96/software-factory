@@ -1,6 +1,6 @@
 """sf: the factory's deterministic spine. The orchestrator skill calls it; agents never change state.
 
-  sf init <dir> --profile P [--repo OWNER/NAME] [--base BRANCH]   create or update a factory home
+  sf init <dir> --profile P [--repo OWNER/NAME] [--base BRANCH] [--key be|fe]   create or update a factory home
   sf add-repo <key> --profile P --repo OWNER/NAME [--base BRANCH]  add a repository (e.g. fe) to this home
   sf refs                         clone/update the read-only references (framework source, docs)
   sf doctor                       check Odoo credentials, project, stages, tags, users, gh, repos
@@ -101,8 +101,9 @@ def main(argv=None):
             p.add_argument("--profile")
             p.add_argument("--repo")
             p.add_argument("--base", default="main")
+            p.add_argument("--key", default="be", help="be (back-end) o fe (front-end)")
             a = p.parse_args(args)
-            root, done = init(a.dir, a.profile, a.repo, a.base)
+            root, done = init(a.dir, a.profile, a.repo, a.base, a.key)
             print(f"{root}:\n" + "\n".join(f"- {d}" for d in done))
             return 0
         if cmd == "mcp":

@@ -1,0 +1,42 @@
+{
+  "agent_sets": ["frontend"],
+  "routing": {
+    "low": { "code": "haiku" },
+    "medium": { "code": "sonnet", "ui": "haiku" },
+    "high": { "code": "sonnet", "ui": "sonnet" }
+  },
+  "surface_reviewers": {
+    "security": { "fe-security": "opus" },
+    "ux": { "ux": "sonnet" },
+    "ui": { "ui": "sonnet" },
+    "api": { "contract": "sonnet" }
+  },
+  "path_reviewers": {
+    "contract": {
+      "model": "sonnet",
+      "paths": ["**/api/**", "**/services/**", "**/*api*.ts", "**/*Api*.ts", "**/types/**", "**/*.types.ts", "**/queries/**"]
+    },
+    "ui": {
+      "model": "haiku",
+      "paths": ["**/components/**", "**/pages/**", "**/app/**/page.tsx", "**/*.css", "**/*.scss"]
+    },
+    "fe-security": {
+      "model": "opus",
+      "paths": ["**/auth/**", "**/middleware.ts", "**/*Guard*", "**/*guard*"],
+      "patterns": ["dangerouslySetInnerHTML", "innerHTML", "localStorage", "sessionStorage", "eval\\(", "new Function\\(", "window\\.location(\\.href)?\\s*="]
+    }
+  },
+  "high_risk_paths": [
+    "**/auth/**",
+    "**/middleware.ts",
+    "**/package.json",
+    "**/package-lock.json",
+    "**/pnpm-lock.yaml",
+    "**/yarn.lock",
+    "**/vite.config.*",
+    "**/next.config.*",
+    "**/Dockerfile",
+    "**/nginx/**"
+  ],
+  "protected_paths": [".github/**"]
+}

@@ -1,0 +1,42 @@
+{
+  "agent_sets": ["backend"],
+  "routing": {
+    "low": { "code": "haiku" },
+    "medium": { "code": "sonnet" },
+    "high": { "code": "sonnet" }
+  },
+  "surface_reviewers": {
+    "security": { "security": "opus" },
+    "data": { "data": "sonnet" },
+    "api": { "api": "sonnet" }
+  },
+  "path_reviewers": {
+    "security": {
+      "model": "opus",
+      "paths": ["**/auth/**", "**/middleware/**", "**/guards/**", "**/*.guard.ts", "**/*.strategy.ts"],
+      "patterns": ["\\$queryRawUnsafe", "\\$executeRawUnsafe", "\\.raw\\(`", "query\\(`.*\\$\\{", "child_process", "eval\\(", "new Function\\(", "rejectUnauthorized:\\s*false", "cors\\(\\)"]
+    },
+    "data": {
+      "model": "sonnet",
+      "paths": ["**/prisma/**", "**/migrations/**", "**/entities/**", "**/*.entity.ts", "**/repositories/**", "**/*.repository.ts", "**/models/**", "**/db/**"],
+      "patterns": ["\\$transaction", "createQueryBuilder", "\\.findMany\\(", "knex\\("]
+    },
+    "api": {
+      "model": "sonnet",
+      "paths": ["**/routes/**", "**/controllers/**", "**/*.controller.ts", "**/dto/**", "**/*.dto.ts", "**/schemas/**", "**/openapi*"]
+    }
+  },
+  "high_risk_paths": [
+    "**/prisma/**",
+    "**/migrations/**",
+    "**/auth/**",
+    "**/middleware/**",
+    "**/package.json",
+    "**/package-lock.json",
+    "**/pnpm-lock.yaml",
+    "**/yarn.lock",
+    "**/Dockerfile",
+    "**/.env*"
+  ],
+  "protected_paths": [".github/**"]
+}

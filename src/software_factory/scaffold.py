@@ -40,7 +40,16 @@ def sync_managed(root, cfg):
     for r in repos_of(cfg).values():
         if r["profile"] not in names:
             names.append(r["profile"])
+    # core, then the shared sets the profiles ask for, then each profile's own: a later file with
+    # the same name overrides (java-maven's reviewer-security over the core one, for example)
     sources = sorted((core / "agents").glob("*.md"))
+    sets = []
+    for name in names:
+        for s in _read(_profile_dir(name) / "factory.json").get("agent_sets", []):
+            if s not in sets:
+                sets.append(s)
+    for s in sets:
+        sources += sorted((TEMPLATES / "common" / s / "agents").glob("*.md"))
     for name in names:
         sources += sorted((_profile_dir(name) / "agents").glob("*.md"))
     for src in sources:
@@ -60,10 +69,10 @@ def _repo_entry(profile, repo, base, extra=None):
     entry = {"github": repo, "base_branch": base, "profile": profile}
     entry.update({k: prof[k] for k in PER_REPO if k in prof})
     entry.update(extra or {})
-    return entry, {k: v for k, v in prof.items() if k not in PER_REPO}
+    return entry, {k: v for k, v in prof.items() if k not in PER_REPO and k != "agent_sets"}
 
 
-def init(target, profile, repo, base):
+def init(target, profile, repo, base, key="be"):
     root = Path(target).expanduser().resolve()
     core = TEMPLATES / "core"
     root.mkdir(parents=True, exist_ok=True)
@@ -75,7 +84,7 @@ def init(target, profile, repo, base):
         cfg = _read(core / "factory.json")
         entry, rest = _repo_entry(profile, repo, base)
         cfg.update(rest)
-        cfg["repos"] = {"be": entry}
+        cfg["repos"] = {key: entry}
         _write(cfg_path, cfg)
         done.append("factory.json creato: completa la sezione odoo")
     cfg = _read(cfg_path)

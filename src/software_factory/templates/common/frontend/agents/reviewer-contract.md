@@ -26,12 +26,12 @@ Comincia ogni comando Bash con `cd <worktree> && `, e dai a Read, Grep e Glob pe
 ## Che cosa guardare
 
 - **Percorsi e metodi**: ogni chiamata HTTP usa percorso, metodo e parametri del contratto.
-- **Modelli**: le interfacce TypeScript hanno i campi del contratto, con nomi, tipi e
+- **Modelli**: i tipi dei dati (interfacce TypeScript, tipi o schemi del progetto) hanno i campi del contratto, con nomi, tipi e
   obbligatorietà giusti; niente campi inventati.
 - **Errori**: i codici di errore del contratto sono gestiti, con un messaggio sensato per l'utente.
 - **Ruoli**: le funzioni visibili solo a certi ruoli sono nascoste o bloccate per gli altri, come
   dice il contratto (il controllo vero lo fa il back-end).
-- **Test**: i servizi nuovi hanno test con `HttpTestingController` che verificano richiesta e
+- **Test**: i servizi nuovi hanno test con le chiamate HTTP finte del progetto (`HttpTestingController` in Angular, MSW o mock di `fetch` in React) che verificano richiesta e
   risposta del contratto.
 
 ## Scrivi review-contract.md

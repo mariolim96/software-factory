@@ -311,3 +311,23 @@ def test_test_note_comes_from_the_approver(factory):
     tid, title, text = factory.odoo.notes[-1]
     assert title == "pronto per il test" and text.startswith("Apri la pagina X come referente.")
     assert factory.odoo.tasks_db[100]["stage_id"][0] == STAGES["test"]
+
+
+@pytest.mark.parametrize("profile", ["java-maven", "angular", "react", "python", "node", "odoo"])
+def test_every_routed_reviewer_has_an_agent(tmp_path, monkeypatch, profile):
+    from software_factory import scaffold
+    monkeypatch.setattr(scaffold, "run", lambda *a, **k: None)  # no git clone
+    root, _ = scaffold.init(tmp_path / "home", profile, "o/r", "main")
+    cfg = json.loads((root / "factory.json").read_text(encoding="utf-8"))
+    rc = {**cfg, **cfg["repos"]["be"]}
+    named = set()
+    for table in rc["routing"].values():
+        named |= set(table)
+    for table in rc.get("surface_reviewers", {}).values():
+        named |= set(table)
+    named |= set(rc.get("path_reviewers", {}))
+    agents = {p.stem.removeprefix("reviewer-") for p in (root / ".claude" / "agents").glob("reviewer-*.md")}
+    assert named <= agents, f"{profile}: no agent for {named - agents}"
+    assert (root / ".claude" / "profiles" / f"{profile}.md").exists()
+    assert (root / "checks" / "be" / "check.sh").exists()
+    assert "agent_sets" not in cfg
