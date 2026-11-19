@@ -141,7 +141,8 @@ def close(f, task):
             text = (f"{body}\n\n## Origine\n\nSegnalazione dal front-end su T{fe} ({o.task_url(fe)}), "
                     f"verificata dalla factory sul codice back-end. Rischio stimato: {risk}.\n\n"
                     f"Solo back-end: il front-end resta in T{fe}, a chi lo sviluppa.")
-            rep["task"] = o.create_subtask(rep["parent"] or fe, title, text, ["queue", "backend"], [])
+            rep["task"] = o.create_subtask(rep["parent"] or fe, title, text, ["queue", "backend"],
+                                         [o.users["team_leader"]])
             save(f, rep)
         o.post_note(fe, (sec("Nota per il front-end") or "Il back-end va adeguato.")
                     + f"\n\nTask back-end creato e messo in coda per la factory: T{rep['task']} "

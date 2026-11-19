@@ -50,6 +50,13 @@ tecniche restano allo spec-writer, quelle che solo il team leader può prendere 
 il sottotask torna in `build` se resta almeno un finding confermato, altrimenti va al merge.
 Lo stadio successivo lo dice `sf reviews` (`NEXT:`).
 
+In `approve`, con `e2e.mode` attivo, `sf e2e` esegue lo script E2E della home sui branch del
+padre e scrive `e2e/e2e.md` con i commit provati. `sf advance` da `approve` verso il merge
+rifiuta se manca un'esecuzione su quei commit; in `blocking` anche se è fallita, in `info` no:
+la classificazione dell'approver (`## E2E` di decision.md) va al team leader. Un lock
+(`jobs/.e2e.lock`) tiene un'esecuzione alla volta, perché lo stack di test è uno solo, e `sf e2e`
+non tiene il lock del job mentre gira, come `sf gate`.
+
 Le mosse legali sono in `PARENT` e `SUB` di `jobs.py`. `sf advance` controlla i file che le
 giustificano. Esegue anche gli effetti su Odoo e GitHub: note, sottotask, stadi, tag,
 attività, PR, branch.
@@ -107,7 +114,7 @@ Dalle stesse trascrizioni: ogni messaggio ha un `timestamp`, e accanto a ogni tr
 una pausa di più di 45 minuti (un agente ripreso dopo) apre un intervallo nuovo, mentre un
 gate dentro l'agente (`sf check`) resta sotto la soglia. `sf advance` copia gli intervalli in
 `job["work"]` con una chiave per agente e intervallo, così sopravvivono alla pulizia delle
-trascrizioni; `sf gate` e `sf merge` aggiungono le loro esecuzioni del gate. `sf log` unisce
+trascrizioni; `sf gate` e `sf merge` aggiungono le loro esecuzioni del gate, `sf e2e` le sue. `sf log` unisce
 quello che è salvato con quello che le trascrizioni mostrano in quel momento, senza scrivere.
 
 ## Limiti noti

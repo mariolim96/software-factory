@@ -24,7 +24,10 @@ happen here too, so the orchestrator never improvises them.
 """
 
 import json
+import os
 import re
+import shutil
+import time
 from pathlib import Path
 
 from . import hours, reports, taskdoc
@@ -95,6 +98,14 @@ def merge_policy(cfg):
     if cfg.get("parent_merge") == "auto":
         return {"low": "auto", "medium": "auto", "high": "human"}
     return {"low": "human", "medium": "human", "high": "human"}
+
+
+def e2e_mode(cfg):
+    """off: no E2E step. info: the parent runs the E2E before the approver, failures don't
+    block by themselves. blocking: a parent merges only when the E2E passed."""
+    mode = (cfg.get("e2e") or {}).get("mode", "off")
+    require(mode in {"off", "info", "blocking"}, f"e2e.mode {mode!r} isn't off, info or blocking")
+    return mode
 
 
 def repo_order(keys):
@@ -241,6 +252,8 @@ class Factory:
                 f"T{task_id} is a sub-task the factory is already building")
         require(self.odoo.stage_key(t["stage_id"]) == "todo", f"T{task_id} isn't in To Do")
         require(self.odoo.tag_ids["queue"] in t["tag_ids"], f"T{task_id} isn't tagged for the factory")
+        if not t["user_ids"]:  # taken over by the factory: the team leader answers for it
+            self.odoo.assign(task_id, ["team_leader"])
         job_id = f"t{task_id}"
         self.dir(job_id).mkdir(parents=True)
         job = {
@@ -337,12 +350,14 @@ class Factory:
                 self._escalate_parent(job)
             else:
                 require(line == "APPROVE", f"decision.md starts with {line!r}, not APPROVE")
+                self._require_e2e(job)
                 tier, reasons = self._human_merge_reasons(job)
                 require((stage == "ready") == bool(reasons),
                         f"go to ready: {'; '.join(reasons)}" if reasons else "nothing requires a human merge: go to merging")
                 job["merge"] = {"tier": tier, "mode": "human" if reasons else "auto", "reasons": reasons}
                 self._describe_parent_prs(job, tier, reasons)
                 self._post_preexisting(job)
+                self._post_e2e_failures(job)
                 if stage == "ready":
                     self._ready_parent(job, reasons)
 
@@ -382,6 +397,7 @@ class Factory:
         plan = read_plan(triage, self.cfg)
         o = self.odoo
         factory_fe = job.get("fe_mode") == "factory"
+        tl = o.users["team_leader"]  # the factory's sub-tasks: the team leader answers for them
         require(not (factory_fe and plan["frontend"]) or self.home.has_repo("fe"),
                 "the task asks the factory for the front-end, but factory.json has no `fe` repository")
         require(not plan["docs"] or self.home.has_repo("docs"),
@@ -405,7 +421,7 @@ class Factory:
         for i, item in enumerate(plan["backend"]):
             sid = self._subtask(job, f"{prefix}-be{i}", item["title"],
                                 f"{item['brief']}\n\nSottotask back-end di T{job['task']}: lo realizza la factory.",
-                                ["backend"], [])
+                                ["backend"], [tl])
             self._add_sub(job, sid, item, "be")
             lines.append(f"- T{sid} (back-end, factory): {item['title']}")
         for i, item in enumerate(plan["frontend"]):
@@ -424,7 +440,7 @@ class Factory:
             if factory_fe:
                 sid = self._subtask(job, f"{prefix}-fe{i}", item["title"],
                                     text + f"\n\nSottotask front-end di T{job['task']}: lo realizza la factory.",
-                                    ["frontend"], [])
+                                    ["frontend"], [tl])
                 self._add_sub(job, sid, item, "fe")
                 lines.append(f"- T{sid} (front-end, factory): {item['title']}")
             else:
@@ -440,7 +456,7 @@ class Factory:
         for i, item in enumerate(plan["docs"]):
             sid = self._subtask(job, f"{prefix}-docs{i}", item["title"],
                                 f"{item['brief']}\n\nSottotask di documentazione di T{job['task']}: lo realizza "
-                                "la factory dopo il codice.", [], [])
+                                "la factory dopo il codice.", [], [tl])
             self._add_sub(job, sid, item, "docs")
             lines.append(f"- T{sid} (documentazione, factory): {item['title']}")
         summary = section(triage, "Nota per il ticket") or ""
@@ -579,6 +595,108 @@ class Factory:
         self.note(job, note, "problemi preesistenti")
         self.odoo.activity(job["task"], "team_leader", f"Factory: problemi preesistenti trovati su T{job['task']}", note)
         job["preexisting_posted"] = job["cycle"]
+
+    # -- end-to-end tests of the whole change
+
+    def _parent_commits(self, job):
+        return {k: git(r["worktree"], "rev-parse", "HEAD").stdout.strip()
+                for k, r in sorted(job["repos"].items()) if r.get("worktree")}
+
+    def _require_e2e(self, job):
+        mode = e2e_mode(self.cfg)
+        if mode == "off":
+            return
+        e = job.get("e2e")
+        require(e and e["commits"] == self._parent_commits(job),
+                f"run the E2E tests on the parent branches first: sf e2e {job['id']}")
+        if mode == "blocking":
+            require(e["verdict"] == "PASS",
+                    f"the E2E tests failed and e2e.mode is blocking: see {self.dir(job['id'])}/e2e/e2e.md")
+
+    def _post_e2e_failures(self, job):
+        """info mode: failed E2E tests don't stop the merge, but the team leader hears about them."""
+        e = job.get("e2e")
+        if not e or e["verdict"] == "PASS" or e.get("posted"):
+            return
+        d = self.dir(job["id"]) / "decision.md"
+        triage = ((section(d, "E2E") or "") if d.exists() else "").strip() or "L'approver non li ha classificati."
+        counts = ", ".join(f"{v} {k}" for k, v in (("passati", e.get("passed")), ("falliti", e.get("failed")),
+                                                    ("instabili", e.get("flaky"))) if v is not None)
+        text = (f"I test end-to-end sul lavoro completo sono falliti{f' ({counts})' if counts else ''}. Per ora "
+                "sono informativi: non hanno bloccato il merge. Classificazione dei fallimenti fatta "
+                f"dall'approver:\n\n{triage}")
+        self.note(job, text, "test end-to-end")
+        self.odoo.activity(job["task"], "team_leader", f"Factory: test end-to-end falliti su T{job['task']}", text)
+        e["posted"] = True
+
+    def e2e(self, job_id):
+        """Run the home's E2E script on the parent branches of a parent in approve.
+
+        Repositories the task didn't touch run at their integration branch. One run at a
+        time per home: the stack and its database are shared. The job isn't held meanwhile.
+        """
+        mode = e2e_mode(self.cfg)
+        require(mode != "off", "e2e.mode is off in factory.json")
+        script = self.home.root / (self.cfg.get("e2e") or {}).get("script", "checks/e2e.sh")
+        require(script.exists(), f"{script} doesn't exist")
+        job = self.load(job_id)
+        require(job["kind"] == "parent" and job["stage"] == "approve", f"{job_id} isn't a parent in approve")
+        lock = None
+        if fcntl:
+            lock = open(self.home.jobs / ".e2e.lock", "w")
+            fcntl.flock(lock, fcntl.LOCK_EX)  # waits for the run of another parent
+        out = self.dir(job_id) / "e2e"
+        shutil.rmtree(out, ignore_errors=True)
+        out.mkdir(parents=True)
+        env = dict(os.environ, FACTORY_JOB=job_id, FACTORY_HOME=str(self.home.root), FACTORY_E2E_OUT=str(out))
+        commits, where, temps = self._parent_commits(job), [], []
+        start, t0 = now(), time.monotonic()
+        try:
+            for key in repo_order(self.home.repo_keys()):
+                r = job["repos"].get(key)
+                if r and r.get("worktree"):
+                    wt, files = r["worktree"], self.changed_files(r["worktree"], f"origin/{self.home.base(key)}")
+                    where.append(f"{key}: {r['branch']} ({commits[key][:7]})")
+                else:
+                    repo, base, wt, files = self.home.repo_path(key), self.home.base(key), \
+                        self.home.worktrees / f"_e2e-{job_id}-{key}", []
+                    git(repo, "fetch", "origin", base)
+                    git(repo, "worktree", "remove", "--force", str(wt), check=False)
+                    git(repo, "worktree", "add", "--detach", str(wt), f"origin/{base}")
+                    temps.append((repo, wt))
+                    where.append(f"{key}: {base}")
+                changed = out / f"changed-{key}.txt"
+                changed.write_text("".join(f"{p}\n" for p in files), encoding="utf-8")
+                env[f"FACTORY_WORKTREE_{key.upper()}"] = str(wt)
+                env[f"FACTORY_CHANGED_{key.upper()}"] = str(changed)
+            res = run(["bash", str(script)], cwd=self.home.root, check=False, env=env)
+        finally:
+            for repo, wt in temps:
+                git(repo, "worktree", "remove", "--force", str(wt), check=False)
+            if lock:
+                lock.close()
+        seconds = int(time.monotonic() - t0)
+        verdict = "PASS" if res.returncode == 0 else "FAIL"
+        log = f"{res.stdout}{res.stderr}"
+        (out / "e2e.log").write_text(log, encoding="utf-8")
+        summary = out / "summary.md"  # optional, written by the script: PASSED/FAILED/FLAKY lines, then text
+        counts = {k.lower(): int(v) for k, v in (header(summary) if summary.exists() else {}).items()
+                  if k in {"PASSED", "FAILED", "FLAKY"} and str(v).strip().isdigit()}
+        detail = summary.read_text(encoding="utf-8").partition("\n\n")[2].strip() if summary.exists() else ""
+        tail = "\n".join(log.rstrip().splitlines()[-80:])
+        result = "sono passati" if verdict == "PASS" else f"sono falliti con exit {res.returncode}"
+        (out / "e2e.md").write_text(
+            f"E2E: {verdict}\nCOMMITS: {' '.join(f'{k}={c}' for k, c in commits.items())}\nMODE: {mode}\n\n"
+            f"## Summary\n- I test end-to-end {result} in {seconds}s\n- Codice provato: {'; '.join(where)}\n"
+            + "".join(f"- {k}: {v}\n" for k, v in counts.items())
+            + (f"\n## Dettaglio\n{detail}\n" if detail else "")
+            + f"\n## Log\nUltime 80 righe di e2e.log:\n\n```\n{tail}\n```\n", encoding="utf-8")
+        job = self.locked(job_id)
+        job["e2e"] = {"verdict": verdict, "commits": commits, "at": now(), **counts}
+        job.setdefault("e2e_runs", []).append({"at": now(), "verdict": verdict, **counts})
+        self._worked(job, "e2e", verdict, start)
+        self.save(job)
+        return verdict, out / "e2e.md"
 
     def pr_links(self, job):
         return "\n".join(f"- {key}: {r['pr_url']}" for key, r in sorted(job["repos"].items()) if r.get("pr_url")) or "-"

@@ -26,6 +26,7 @@ di ZazenCodes (vedi [NOTICE](NOTICE)). Il perché delle scelte è in [DESIGN.md]
 - [Uso quotidiano](#uso-quotidiano) (e [rinnovo della chiave Odoo](#rinnovare-la-chiave-api-di-odoo))
 - [Agenti e profili](#agenti-e-profili)
 - [Gate](#gate)
+- [Test end-to-end](#test-end-to-end)
 - [Review e merge automatici](#review-e-merge-automatici)
 - [Domande al PM](#domande-al-pm)
 - [Documentazione](#documentazione)
@@ -50,7 +51,7 @@ task padre in Odoo: tag della factory, To Do
     · scelta funzionale non decisa → domande al PM, il padre torna in To Do finché risponde
     · gate rosso o finding confermati → nuovo giro del builder (al massimo max_rounds)
      ▼ tutti uniti
-  approver sul lavoro completo
+  test end-to-end sul lavoro completo (se attivi), poi approver
      │ APPROVE → la factory unisce le PR nei branch di integrazione, se il rischio lo consente;
      │           altrimenti le PR restano pronte per il team leader
      │ ESCALATE → nota e attività al team leader
@@ -83,6 +84,12 @@ aperta e quando viene unita, e sul task padre quando le PR del padre sono pronte
 | done | Done |
 
 I sottotask vanno da To Do a In Progress, Review e Done, mai a Test: il collaudo è sul padre.
+
+Assegnatari: quando la factory prende un task senza assegnatario lo assegna al team leader,
+che ne risponde; un assegnatario scelto da una persona resta. I sottotask della factory
+(back-end, front-end della factory, documentazione) e i task back-end aperti da una
+segnalazione vanno al team leader; i sottotask front-end di una persona a `odoo.users.frontend`.
+In Test il padre passa al PM.
 
 ### I pezzi
 
@@ -213,6 +220,7 @@ sf init .        # dalla home: aggiorna agenti, skill e profili
 | `merge_method` | `merge`, `squash` o `rebase` per le PR. |
 | `merge_policy` | Per livello di rischio (`low`, `medium`, `high`): `auto` se la factory unisce da sola, `human` se lascia la PR al team leader. |
 | `verify` | Verificatori dei finding importanti: `votes`, `confirm`, `model`. `votes: 0` spegne la verifica. |
+| `e2e` | I test end-to-end del padre: `mode` (`off`, `info`, `blocking`) e `script` (di default `checks/e2e.sh`). Vedi [Test end-to-end](#test-end-to-end). |
 | `high_risk_paths` | File che vogliono sempre una persona per il merge (migrazioni, sicurezza, dipendenze). |
 | `protected_paths` | File che la factory non può modificare: il gate fallisce. |
 | `routing`, `surface_reviewers`, `path_reviewers` | Quali revisori, su quale modello, per rischio, superficie e file toccati. |
@@ -313,6 +321,40 @@ Il gate è l'unico controllo deterministico prima della review:
 I controlli stanno nella home e non nel repository, quindi un branch non li può cambiare. I
 profili eseguono build e test in container con la versione di Java, Node o Python del progetto;
 le variabili in cima agli script li adattano.
+
+## Test end-to-end
+
+I test end-to-end hanno senso sul lavoro completo, non sul singolo sottotask: girano sul task
+padre, quando tutti i sottotask sono uniti nei branch del padre e prima dell'approver.
+
+- `sf e2e <job>` esegue lo script `e2e.script` della home (di default `checks/e2e.sh`). Come i
+  controlli del gate, sta nella home: un branch non lo può cambiare.
+- Lo script riceve i worktree con i branch del padre (`FACTORY_WORKTREE_BE`,
+  `FACTORY_WORKTREE_FE`, ...; un repository che il task non tocca è al suo branch di
+  integrazione), i file cambiati per repository (`FACTORY_CHANGED_<REPO>`, un file con un
+  percorso per riga) e la cartella dei risultati (`FACTORY_E2E_OUT`). Esce con 0 se i test
+  passano. Può scrivere `summary.md` nella cartella dei risultati: righe `PASSED:`, `FAILED:`,
+  `FLAKY:`, una riga vuota e il dettaglio.
+- `sf` scrive `jobs/<job>/e2e/e2e.md`. L'approver lo legge e classifica ogni test fallito
+  (bug dell'applicazione, test da aggiornare, test instabile, ambiente) con confidenza e prova.
+- Una esecuzione alla volta per home: lo stack e il database di test sono uno solo. Un
+  secondo `sf e2e` aspetta il primo.
+- Se dopo l'esecuzione i branch del padre cambiano, `sf advance` chiede di rieseguirlo.
+
+`e2e.mode`:
+
+| Modo | Effetto |
+|---|---|
+| `off` | Nessun test end-to-end (il default). |
+| `info` | I test girano e l'approver li classifica, ma un fallimento non blocca il merge da solo: la classificazione va al team leader come nota e attività. L'approver fa ESCALATE solo per un bug dell'applicazione causato dal task, con confidenza alta. Serve a misurare quanto sono affidabili i test prima di renderli bloccanti. |
+| `blocking` | Il padre si unisce solo se i test passano. |
+
+`sf metrics` conta le esecuzioni, quelle fallite e i test instabili (passati al secondo
+tentativo); `sf log` le conta come "test end-to-end".
+
+Le password delle utenze di test stanno in un file della home sotto `secrets/` (per esempio
+`secrets/e2e.env`), letto solo dallo script: le impostazioni della home ne negano la lettura
+agli agenti, e `.gitignore` lo esclude.
 
 ## Review e merge automatici
 
@@ -427,7 +469,7 @@ decidere se allargare `merge_policy`.
   `search_tasks`, `list_subtasks`), ognuno solo se il suo `tools:` lo elenca. Builder e
   revisori non hanno accesso a Odoo. Solo `sf` scrive su Odoo.
 - **Credenziali.** Le impostazioni della home negano agli agenti la lettura del file delle
-  credenziali. Usa una chiave dedicata, con la durata più lunga che l'istanza consente, e
+  credenziali e della cartella `secrets/` (le password delle utenze di test). Usa una chiave dedicata, con la durata più lunga che l'istanza consente, e
   rinnovala con `sf odoo-key`: quando Odoo risponde 401, `sf` e il server MCP rileggono il file
   una volta, così le sessioni aperte continuano senza riavvio.
 - **Git e GitHub.** Gli agenti fanno push solo del branch del loro job. Le impostazioni negano
@@ -457,6 +499,7 @@ Li usa l'orchestratore, ma servono anche a mano per capire lo stato.
 | `sf check <job>` | Prova i controlli del gate nel worktree di un sottotask. |
 | `sf gate <job>` / `sf gate --base [<repo>] [--force]` | Gate di un sottotask / del branch di integrazione. |
 | `sf reviews <job>` | Aggiorna i verdetti del giro e stampa il passo successivo. |
+| `sf e2e <job>` | Test end-to-end del padre sui suoi branch, prima dell'approver. |
 | `sf merge <job>` | Allinea, ripete il gate e unisce le PR. |
 | `sf header <job>` | La riga con cui comincia ogni prompt degli agenti. |
 | `sf mcp` | Avvia il server MCP di Odoo (lo usa Claude Code). |

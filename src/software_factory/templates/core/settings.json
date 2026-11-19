@@ -11,6 +11,7 @@
     ],
     "deny": [
       "Read({{CREDENTIALS}})", "Read(**/.odoo-*.json)", "Bash(cat {{CREDENTIALS}}:*)",
+      "Read(**/secrets/**)", "Bash(cat secrets/:*)", "Bash(cat */secrets/:*)",
       "Edit({{REFS}}/**)", "Write({{REFS}}/**)",
       "Bash(gh pr merge:*)", "Bash(gh pr ready:*)", "Bash(gh pr close:*)", "Bash(gh repo:*)", "Bash(gh api:*)",
       "Bash(git push --force:*)", "Bash(git push -f:*)", "Bash(git push origin --delete:*)",

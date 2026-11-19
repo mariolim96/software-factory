@@ -460,7 +460,7 @@ def test_front_end_report_opens_a_back_end_task_in_the_queue(factory, monkeypatc
     t = o.tasks_db[new]
     assert t["parent_id"][0] == 100 and t["name"] == "BE-09 Ruolo di accesso alla pratica"
     assert sorted(t["tag_ids"]) == sorted([o.tag_ids["queue"], o.tag_ids["backend"]])
-    assert t["stage_id"][0] == STAGES["todo"] and t["user_ids"] == []
+    assert t["stage_id"][0] == STAGES["todo"] and t["user_ids"] == [26]
     assert "ruoloAccesso" in t["description"] and "T300" in t["description"]
     assert o.notes[-1][:2] == (300, "segnalazione: serve il back-end") and f"T{new}" in o.notes[-1][2]
     assert rep["stage"] == "closed" and rep["verdict"] == "BACKEND"
@@ -523,7 +523,7 @@ def test_report_only_on_tagged_tasks_and_again_when_retagged(factory):
 
     o.set_tags(300, add=["report"])
     reports.start(factory, 300)
-    (factory.home.jobs / "r300-1" / "verdict.md").write_text("VERDICT: NONE\n\n## Perché\nÈ un grazie.\n")
+    (factory.home.jobs / "r300-1" / "verdict.md").write_text("VERDICT: NONE\n\n## Perché\nÈ un grazie.\n", encoding="utf-8")
     reports.close(factory, 300)
     assert o.notes == [] and o.activities == [] and reports.pending(factory) == []
 
@@ -562,7 +562,7 @@ def test_factory_builds_the_front_end_when_tagged(factory):
     subs = [factory.load(s) for s in job["subs"]]
     assert [s["repo"] for s in subs] == ["be", "be", "fe"] and job["fe_tasks"] == []
     fe = subs[2]
-    assert fe["base"] == "factory/t100" and factory.odoo.tasks_db[fe["task"]]["user_ids"] == []
+    assert fe["base"] == "factory/t100" and factory.odoo.tasks_db[fe["task"]]["user_ids"] == [26]
     assert sorted(job["repos"]) == ["be", "fe"]
     assert "Repo: " in factory.header(fe) and "(fe)" in factory.header(fe)
     assert "Front-end: lo realizza la factory" in factory.header(job)
@@ -788,3 +788,55 @@ def test_subtask_gets_the_pr_link_in_odoo(factory, monkeypatch):
     factory.advance(factory.locked(sub["id"]), "merged")
     tid, title, text = factory.odoo.notes[-1]
     assert (tid, title) == (sub["task"], "unito") and url in text
+
+
+def test_factory_tasks_are_assigned_to_the_team_leader(factory):
+    job = factory.create(100)
+    o = factory.odoo
+    assert o.tasks_db[100]["user_ids"] == [26]
+    (factory.dir(job["id"]) / "triage.md").write_text(PLAN)
+    job = factory.advance(factory.locked(job["id"]), "building")
+    assert all(o.tasks_db[factory.load(s)["task"]]["user_ids"] == [26] for s in job["subs"])
+    assert o.tasks_db[job["fe_tasks"][0]]["user_ids"] == [8]  # the front-end of a person stays to that person
+    o.tasks_db[101] = dict(o.tasks_db[100], id=101, user_ids=[8], stage_id=[1, "TO DO"])
+    factory.create(101)
+    assert o.tasks_db[101]["user_ids"] == [8]  # an assignee chosen by a person is kept
+
+
+def test_e2e_runs_before_the_approver_and_informs_the_team_leader(factory, monkeypatch):
+    job = _approved(factory, monkeypatch, "APPROVE\nRISK: low\nNEEDS-HUMAN: no\n\n## Summary\n- ok\n\n"
+                    "## E2E\n- login.spec.ts: TEST_BUG, alta, il titolo è cambiato come chiede il task\n",
+                    {"low": "auto", "medium": "auto", "high": "auto"})
+    factory.save(job)
+    with pytest.raises(Refused, match="e2e.mode is off"):
+        factory.e2e(job["id"])
+    factory.cfg["e2e"] = {"mode": "info"}
+    (factory.home.root / "checks").mkdir()
+    (factory.home.root / "checks" / "e2e.sh").write_text("exit 1\n")
+    with pytest.raises(Refused, match="sf e2e"):
+        factory.advance(factory.locked(job["id"]), "merging")
+
+    def script(cmd, cwd, check=True, input=None, env=None):
+        if cmd[:1] == ["bash"]:
+            out = jobs_mod.Path(env["FACTORY_E2E_OUT"])
+            assert env["FACTORY_WORKTREE_BE"] == str(factory.home.root) and "FACTORY_WORKTREE_FE" in env
+            assert (out / "changed-be.txt").read_text() == "src/App.java\n"
+            (out / "summary.md").write_text("PASSED: 23\nFAILED: 1\nFLAKY: 2\n\n- login.spec.ts fallito\n")
+            return FakeRes("1 failed", code=1)
+        return FakeRes()
+
+    monkeypatch.setattr(jobs_mod, "run", script)
+    verdict, report = factory.e2e(job["id"])
+    text = report.read_text(encoding="utf-8")
+    assert verdict == "FAIL" and text.startswith("E2E: FAIL\n") and "login.spec.ts fallito" in text
+    job = factory.load(job["id"])
+    assert job["e2e"]["failed"] == 1 and job["e2e_runs"][-1]["flaky"] == 2
+    assert job["work"][-1]["what"] == "e2e"
+    factory.cfg["e2e"] = {"mode": "blocking"}
+    with pytest.raises(Refused, match="blocking"):
+        factory.advance(factory.locked(job["id"]), "merging")
+    factory.cfg["e2e"] = {"mode": "info"}
+    job = factory.advance(factory.locked(job["id"]), "merging")
+    tid, title, note = factory.odoo.notes[-1]
+    assert title == "test end-to-end" and "TEST_BUG" in note and "23 passati" in note
+    assert factory.odoo.activities[-1][1] == "team_leader" and job["e2e"]["posted"]

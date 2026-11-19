@@ -11,6 +11,8 @@
   sf check <job>                  the builder's dry run of the gate checks in its worktree
   sf gate <job>                   run the gate on a sub-task in gate → round-N/checks.md
   sf gate --base [<repo>] [--force]   gate the integration branch(es) alone (cached per commit)
+  sf e2e <job>                    end-to-end tests of a parent in approve, on its parent branches
+                                  → jobs/<job>/e2e/e2e.md (one run at a time; needs e2e.mode in factory.json)
   sf merge <job>                  sync with the base, gate, merge the PR(s) (sub-task or parent)
   sf header <job>                 the line every agent prompt starts with
   sf report start|close|header <task>     a front-end report: open it (prints the fe-report header),
@@ -128,6 +130,11 @@ def cmd_metrics(f, days):
         group = [p for p in parents if p["merge"]["tier"] == tier]
         auto = sum(p["merge"]["mode"] == "auto" for p in group)
         print(f"  rischio {tier}: {auto} merge automatici, {len(group) - auto} dal team leader")
+    runs = [r for j in jobs if j["kind"] == "parent" for r in j.get("e2e_runs", [])]
+    if runs:
+        failed = sum(r["verdict"] != "PASS" for r in runs)
+        flaky = sum(r.get("flaky", 0) for r in runs)
+        print(f"esecuzioni E2E: {len(runs)}, fallite {failed}; test instabili (passati al secondo tentativo) {flaky}")
     tasks = {j["task"] for j in jobs if j["kind"] == "parent"}
     reverted = []
     for key in f.home.repo_keys():
@@ -282,6 +289,10 @@ def main(argv=None):
                 print(f"\nPercorsi protetti modificati (il gate fallirà): {', '.join(protected)}")
             print(f"\nCHECKS: {'PASS' if code == 0 and not protected else 'FAIL'} (exit {code}, {seconds}s)")
             return 0 if code == 0 and not protected else 1
+        elif cmd == "e2e" and len(args) == 1:
+            verdict, report = f.e2e(f.resolve(args[0])["id"])
+            print(f"E2E: {verdict}: {report}")
+            return 0 if verdict == "PASS" else 1
         elif cmd == "merge" and len(args) == 1:
             job = f.merge(f.locked(f.resolve(args[0])["id"]))
             print(f"{job['id']}: {job['stage']}")

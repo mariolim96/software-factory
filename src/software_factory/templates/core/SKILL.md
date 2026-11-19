@@ -33,6 +33,7 @@ task padre (tag factory, To Do)
     spec-writer (opus) → builder (opus) → gate (sf) → revisori (instradati) → verificatori → merge nel branch del padre
        ▲________ finding confermati / gate FAIL ________________________|     max_rounds giri, poi il team leader
        ▼ tutti uniti
+  test end-to-end (sf e2e, se e2e.mode lo chiede) sullo stack di test con i branch del padre
   approver (opus) su tutti i branch del padre ── APPROVE → sf: merge automatico se merge_policy lo consente
        │                                            per il livello di rischio, o PR pronta per il team leader (ready)
        │                                 ESCALATE → nota e attività per il team leader
@@ -98,8 +99,14 @@ per esempio `t9563-s9601 T9601: gate PASS → review (code sonnet, security opus
   sottotask della factory. Poi esegui `sf queue` e avvia ciò che dice.
 - `DECISION: UNCLEAR`: `sf advance <job> unclear`. Il job aspetta una risposta in Odoo.
 
-**approve.** Dopo `sf advance <job> approve` (te lo dice la coda), lancia `approver` con
-`<header>`. Quando torna, leggi la prima riga di `decision.md`:
+**approve.** Dopo `sf advance <job> approve` (te lo dice la coda), se `factory.json` ha
+`e2e.mode` diverso da `off`, esegui prima `sf e2e <job>` in background (alza lo stack di test
+con i branch del padre e lancia i test end-to-end: può durare decine di minuti, e attende se
+un altro padre li sta già eseguendo). Il comando esce con 1 quando i test falliscono: non è un
+errore della factory, lancia comunque l'approver, che legge `e2e/e2e.md`. Un rifiuto di
+`sf advance` che chiede `sf e2e` vuol dire che i branch sono cambiati dall'ultima esecuzione:
+rieseguilo. Poi lancia `approver` con `<header>`. Quando torna, leggi la prima riga di
+`decision.md`:
 - `APPROVE`: `sf merge <job>` in background. Se il merge è riservato a una persona (livello di
   rischio che `merge_policy` non lascia alla factory, percorsi in `high_risk_paths`,
   `NEEDS-HUMAN` dell'approver), rifiuta e dice perché: allora `sf advance <job> ready` (le PR
@@ -202,7 +209,8 @@ sottotask, `done` o `dropped` per i padri).
 
 **Ripresa.** Lo stato sta nei file, quindi una nuova sessione riprende dove una vecchia si
 è fermata. Per una riga `resume` di un job già in corso, ripeti il passo del suo stadio:
-`triage`, `spec` e `approve` rilanciano il loro agente; `build` lancia un nuovo builder
+`triage` e `spec` rilanciano il loro agente; `approve` riesegue `sf e2e` se
+`e2e/e2e.md` manca (con `e2e.mode` attivo), poi rilancia l'approver; `build` lancia un nuovo builder
 che riprende; `gate` riesegue il gate; `review` lancia solo i revisori il cui
 `review-<r>.md` manca nel giro corrente; `verify` lancia solo i verificatori il cui
 `verify-<K>.md` manca; `merging` riesegue `sf merge <job>`.

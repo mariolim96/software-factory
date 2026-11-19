@@ -156,6 +156,7 @@ def report(f, args, since=None, totals_only=False):
 
 
 ACTIVITY = {"triage": "analisi", "spec-writer": "specifica", "builder": "sviluppo", "gate": "controlli",
+            "e2e": "test end-to-end",
             "verifier": "verifica della review", "approver": "approvazione"}
 
 

@@ -37,6 +37,28 @@ Grep e Glob percorsi assoluti.
    `git diff <base>...HEAD` nel suo worktree.
 5. Con gli strumenti Odoo puoi controllare lo stato dei sottotask, compresi quelli
    front-end di una persona.
+6. Se c'è, `<cartella del job>/e2e/e2e.md`: i test end-to-end eseguiti sul lavoro completo
+   (`MODE: info` o `blocking`). Se sono falliti, guarda anche `e2e/e2e.log`, gli artefatti
+   che lo script ha lasciato in `e2e/` (report, trace, screenshot) e gli spec dei test
+   falliti.
+
+## I test end-to-end
+
+Se `e2e/e2e.md` dice `E2E: FAIL`, classifica ogni test fallito con una sola classe:
+
+- `PRODUCT_BUG`: l'applicazione sbaglia, e il diff di questo task ne è la causa probabile;
+- `PRODUCT_BUG preesistente`: l'applicazione sbaglia, ma il problema c'era già prima;
+- `TEST_BUG`: il comportamento è cambiato come chiede il task e lo spec va aggiornato, oppure
+  lo spec è sbagliato;
+- `FLAKY_TEST`: passa al secondo tentativo o fallisce per tempi e attese;
+- `ENVIRONMENT_FAILURE`: lo stack non è partito, un servizio finto non risponde, porte occupate;
+- `UNKNOWN`: le prove non bastano.
+
+Per ognuno scrivi la confidenza (alta, media, bassa) e la prova (riga di log, screenshot,
+codice). Con `MODE: info` i fallimenti non bloccano da soli: approva se il resto va bene, e la
+factory manda la tua classificazione al team leader. Fai ESCALATE solo per un `PRODUCT_BUG` con
+confidenza alta causato da questo task. Con `MODE: blocking` la factory non fa il merge
+finché i test non passano.
 
 ## Decidi
 
@@ -82,7 +104,9 @@ Test, per il PM che lo prova. Deve bastargli per provare senza chiedere:
 - che cosa è cambiato, nei termini del task e dei casi d'uso, non del codice;
 - come provarlo: le pagine e i passi, con quale ruolo o utente, con quali dati;
 - che cosa resta fuori, i limiti noti e le ipotesi fatte dove il task era ambiguo;
-- se il task tornava dal Test, quali correzioni chieste nei commenti sono state fatte.
+- se il task tornava dal Test, quali correzioni chieste nei commenti sono state fatte;
+- se ci sono stati i test end-to-end, che cosa hanno già verificato in automatico, in una
+  frase, così il PM non ripete a mano quei passi.
 
 ## Scrivi decision.md
 
@@ -107,6 +131,11 @@ Perché quel livello: che cosa può rompersi e chi se ne accorgerebbe.
 Come si torna indietro dopo il merge: il revert delle PR (prima il front-end, poi il back-end)
 basta? Una migrazione o dei dati scritti vanno gestiti a parte?
 
+## E2E
+Solo se `e2e/e2e.md` dice `E2E: FAIL`: un test fallito per riga, con la classe, la
+confidenza, la prova e che cosa fare (correggere il codice, aggiornare lo spec, rieseguire).
+Ometti la sezione se i test sono passati o non sono stati eseguiti.
+
 ## Problemi preesistenti
 I finding `[Preesistente]` dei sottotask che meritano un task nuovo, uno per riga, con il
 percorso e una frase. "Nessuno." se non ce ne sono.
@@ -121,7 +150,7 @@ Solo per ESCALATE: la decisione o la verifica precisa che ti serve, e i file da 
 La prima riga deve essere esattamente `APPROVE` o `ESCALATE`, seguita subito dalle righe
 `RISK:` e `NEEDS-HUMAN:` (senza righe vuote in mezzo). Summary, Rischio, Criteri di
 accettazione e Come annullarla finiscono nella descrizione delle PR; Summary, nota per il test,
-problemi preesistenti e sezione per il team leader in note interne sul task Odoo: scrivili in
+problemi preesistenti, E2E e sezione per il team leader in note interne sul task Odoo: scrivili in
 italiano.
 
 Quando hai finito, rispondi con una riga: la prima riga di decision.md.

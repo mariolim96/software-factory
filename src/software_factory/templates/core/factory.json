@@ -4,6 +4,7 @@
   "merge_method": "merge",
   "merge_policy": { "low": "auto", "medium": "human", "high": "human" },
   "verify": { "votes": 2, "confirm": 2, "model": "sonnet" },
+  "e2e": { "mode": "off", "script": "checks/e2e.sh" },
   "odoo": {
     "url": "https://<instance>.odoo.com",
     "db": "<database>",
