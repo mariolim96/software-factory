@@ -4,6 +4,7 @@
   sf add-repo <key> --profile P --repo OWNER/NAME [--base BRANCH]  add a repository (e.g. fe) to this home
   sf refs                         clone/update the read-only references (framework source, docs)
   sf doctor                       check Odoo credentials, project, stages, tags, users, gh, repos
+  sf odoo-key [--also FILE]       save a new Odoo API key (asked without echo, checked first)
   sf queue                        what /factory run should do now (see `sf queue --help`)
   sf create <task>                new parent job for an Odoo task tagged for the factory
   sf advance <job> <stage>        move a job, or refuse with the reason
@@ -28,6 +29,7 @@ import re
 import shutil
 import sys
 from datetime import UTC
+from pathlib import Path
 
 from .config import ConfigError, Home
 from .odoo import OdooError
@@ -142,6 +144,38 @@ def cmd_metrics(f, days):
         print(f"  {r}")
 
 
+def cmd_odoo_key(home, args):
+    """Save a new Odoo API key after checking it. Never prints the key."""
+    import getpass
+    import os
+
+    from .odoo import check_key, read_credentials
+    p = argparse.ArgumentParser(prog="sf odoo-key")
+    p.add_argument("--also", action="append", default=[], metavar="FILE",
+                   help="un'altra copia del file delle credenziali da aggiornare")
+    a = p.parse_args(args)
+    if sys.stdin.isatty():
+        key = getpass.getpass("Nuova chiave API di Odoo (non viene mostrata): ").strip()
+    else:
+        key = sys.stdin.readline().strip()
+    require(key, "nessuna chiave")
+    uid = check_key(home.cfg, key)
+    path = Path(home.cfg["odoo"]["credentials_file"]).expanduser()
+    for target in [path, *(Path(x).expanduser() for x in a.also)]:
+        creds = json.loads(target.read_text(encoding="utf-8")) if target.exists() else {}
+        creds["api_key"] = key
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_name(target.name + ".tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            json.dump(creds, out, indent=2)
+            out.write("\n")
+        tmp.replace(target)
+        print(f"salvata in {target}")
+    read_credentials(home.cfg)
+    print(f"chiave valida (utente Odoo {uid}). Le sessioni aperte la rileggono alla prossima chiamata.")
+
+
 def cmd_log(f, args):
     from datetime import datetime, timedelta
 
@@ -184,6 +218,9 @@ def main(argv=None):
             a = p.parse_args(args)
             root, done = init(a.dir, a.profile, a.repo, a.base, a.key)
             print(f"{root}:\n" + "\n".join(f"- {d}" for d in done))
+            return 0
+        if cmd == "odoo-key":
+            cmd_odoo_key(Home(), args)
             return 0
         if cmd == "mcp":
             from .mcp_server import main as mcp_main

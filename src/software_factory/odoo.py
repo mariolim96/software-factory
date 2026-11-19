@@ -105,10 +105,57 @@ TASK_FIELDS = ["name", "description", "stage_id", "tag_ids", "user_ids", "parent
                "child_ids", "project_id", "create_date", "write_date"]
 
 
+KEY_HINT = ("la chiave API di Odoo non è valida o è scaduta: creane una nuova in Odoo "
+            "(Il mio profilo → Sicurezza dell'account → Nuova chiave API) e salvala con `sf odoo-key`")
+
+
+def _post(url, db, key, model, method, body):
+    req = urllib.request.Request(
+        f"{url}/json/2/{model}/{method}",
+        data=json.dumps(body).encode(),
+        method="POST",
+        headers={
+            "Authorization": f"bearer {key}",
+            "X-Odoo-Database": db,
+            "Content-Type": "application/json; charset=utf-8",
+            "User-Agent": "software-factory",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=60) as res:
+        return json.load(res)
+
+
+def _error(model, method, e):
+    try:
+        msg = json.load(e).get("message")
+    except Exception:
+        msg = e.reason
+    hint = f" ({KEY_HINT})" if e.code == 401 else ""
+    return OdooError(f"{model}.{method}: HTTP {e.code}: {msg}{hint}")
+
+
+def read_credentials(cfg):
+    path = Path(cfg["odoo"]["credentials_file"]).expanduser()
+    return path, json.loads(path.read_text(encoding="utf-8"))
+
+
+def check_key(cfg, key):
+    """The user id the key logs in as, or OdooError. Used before saving a new key."""
+    _, creds = read_credentials(cfg) if Path(cfg["odoo"]["credentials_file"]).expanduser().exists() else (None, {})
+    url = (creds.get("url") or cfg["odoo"]["url"]).rstrip("/")
+    db = creds.get("db") or cfg["odoo"]["db"]
+    try:
+        return _post(url, db, key, "res.users", "context_get", {}).get("uid")
+    except urllib.error.HTTPError as e:
+        raise _error("res.users", "context_get", e) from None
+    except urllib.error.URLError as e:
+        raise OdooError(f"res.users.context_get: {e.reason}") from None
+
+
 class Odoo:
     def __init__(self, cfg, ledger_path):
         o = cfg["odoo"]
-        creds = json.loads(Path(o["credentials_file"]).expanduser().read_text(encoding="utf-8"))
+        self._creds_path, creds = read_credentials(cfg)
         self.url = (creds.get("url") or o["url"]).rstrip("/")
         self.db = creds.get("db") or o["db"]
         self._key = creds["api_key"]
@@ -123,28 +170,26 @@ class Odoo:
     # -- transport
 
     def call(self, model, method, **body):
-        req = urllib.request.Request(
-            f"{self.url}/json/2/{model}/{method}",
-            data=json.dumps(body).encode(),
-            method="POST",
-            headers={
-                "Authorization": f"bearer {self._key}",
-                "X-Odoo-Database": self.db,
-                "Content-Type": "application/json; charset=utf-8",
-                "User-Agent": "software-factory",
-            },
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=60) as res:
-                return json.load(res)
-        except urllib.error.HTTPError as e:
+        """One JSON-2 call. On a 401 the credentials file is read again, once: a key renewed
+        with `sf odoo-key` reaches a running process (the MCP server of an open session)."""
+        for attempt in (0, 1):
             try:
-                msg = json.load(e).get("message")
-            except Exception:
-                msg = e.reason
-            raise OdooError(f"{model}.{method}: HTTP {e.code}: {msg}") from None
-        except urllib.error.URLError as e:
-            raise OdooError(f"{model}.{method}: {e.reason}") from None
+                return _post(self.url, self.db, self._key, model, method, body)
+            except urllib.error.HTTPError as e:
+                if e.code == 401 and attempt == 0 and self._reload_key():
+                    continue
+                raise _error(model, method, e) from None
+            except urllib.error.URLError as e:
+                raise OdooError(f"{model}.{method}: {e.reason}") from None
+        return None  # unreachable
+
+    def _reload_key(self):
+        try:
+            key = json.loads(self._creds_path.read_text(encoding="utf-8"))["api_key"]
+        except (OSError, ValueError, KeyError):
+            return False
+        changed, self._key = key != self._key, key
+        return changed
 
     # -- policy
 

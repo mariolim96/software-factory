@@ -150,12 +150,10 @@ Poi, nella home:
 
 1. Completa `factory.json` (vedi [Configurazione](#configurazione)): gli id di Odoo e le regole
    di merge.
-2. Crea il file delle credenziali indicato da `odoo.credentials_file`, con permessi `600`:
-   ```json
-   { "api_key": "<chiave API di Odoo>" }
-   ```
-   Può contenere anche `url`, `db` e `login`, che prevalgono su `factory.json`. Questo file non
-   deve mai finire in un repository.
+2. Salva la chiave API di Odoo con `sf odoo-key`: la chiede senza mostrarla, la prova su
+   Odoo e la scrive nel file indicato da `odoo.credentials_file`, con permessi `600`. Il file
+   può contenere anche `url`, `db` e `login`, che prevalgono su `factory.json`, e non deve mai
+   finire in un repository.
 3. Adatta `checks/<repo>/check.sh` alla CI del repository: deve fallire dove fallirebbe la CI.
 4. Scrivi `PROJECT.md` (il progetto, l'architettura, dove sono i documenti, le aree delicate) e,
    se vuoi, `REVIEW.md` (che cosa conta come problema in review in questo progetto).
@@ -398,7 +396,9 @@ decidere se allargare `merge_policy`.
   `search_tasks`, `list_subtasks`), ognuno solo se il suo `tools:` lo elenca. Builder e
   revisori non hanno accesso a Odoo. Solo `sf` scrive su Odoo.
 - **Credenziali.** Le impostazioni della home negano agli agenti la lettura del file delle
-  credenziali. Usa una chiave dedicata, con la durata più lunga che l'istanza consente.
+  credenziali. Usa una chiave dedicata, con la durata più lunga che l'istanza consente, e
+  rinnovala con `sf odoo-key`: quando Odoo risponde 401, `sf` e il server MCP rileggono il file
+  una volta, così le sessioni aperte continuano senza riavvio.
 - **Git e GitHub.** Gli agenti fanno push solo del branch del loro job. Le impostazioni negano
   `gh pr merge`, i push forzati e i push sui branch di integrazione: i merge passano solo da
   `sf merge`.
@@ -415,6 +415,7 @@ Li usa l'orchestratore, ma servono anche a mano per capire lo stato.
 | `sf add-repo <chiave> --profile P --repo OWNER/NAME [--base B]` | Aggiunge un repository alla home. |
 | `sf refs` | Clona o aggiorna i riferimenti in sola lettura. |
 | `sf doctor` | Controlla Odoo, progetto, stadi, tag, utenti, `gh` e repository. |
+| `sf odoo-key [--also FILE]` | Salva una nuova chiave API di Odoo dopo averla provata; `--also` aggiorna anche un'altra copia del file. |
 | `sf queue` | Che cosa farebbe ora `/factory run`, una riga per job. |
 | `sf summary [<job>...]` | Tabella dei job: stadio, giro, PR, costo. |
 | `sf log [...]` | Ore di lavoro per ticket; `--timesheet` per il timesheet. |
@@ -433,7 +434,7 @@ Li usa l'orchestratore, ma servono anche a mano per capire lo stato.
 
 | Sintomo | Causa e rimedio |
 |---|---|
-| `HTTP 401: Invalid apikey` da `sf doctor` o nel riepilogo | La chiave API di Odoo è scaduta o revocata. Creane una nuova in Odoo (Il mio profilo → Sicurezza dell'account → Nuova chiave API) e mettila nel file delle credenziali. |
+| `HTTP 401: Invalid apikey` da `sf doctor` o nel riepilogo | La chiave API di Odoo è scaduta o revocata. Creane una nuova in Odoo (Il mio profilo → Sicurezza dell'account → Nuova chiave API) ed esegui `sf odoo-key` nella home. Le sessioni aperte la rileggono da sole. |
 | "Il server MCP di Odoo non si è connesso" | Verifica con `claude mcp list` dalla home. Se `sf mcp` si chiude subito, aggiorna la libreria (`uv tool upgrade software-factory`); controlla anche la chiave Odoo. |
 | `sf queue` risponde `pause` | Il branch di integrazione è rosso. Il report è nella cartella `jobs/_base/`: va sistemato sul branch, poi `sf gate --base`. |
 | Righe `hold` | Tutti gli slot di `concurrency` sono occupati: i job ripartono quando uno finisce. |

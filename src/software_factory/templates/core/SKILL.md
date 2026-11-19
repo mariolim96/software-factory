@@ -169,6 +169,9 @@ sottotask, `done` o `dropped` per i padri).
      padre che torna in `triage`, vai a **triage**; per un sottotask che torna in `build`,
      riprendi il builder con il `feedback-<k>.md` appena scritto.
    - `hold`, `wait`: niente da fare ora. `error`: riferisci la nota all'utente.
+   Se `sf` risponde che la chiave API di Odoo non è valida o è scaduta (HTTP 401), fermati e
+   di' all'utente di eseguire `sf odoo-key` nella home, in un suo terminale: la chiave non
+   deve passare da te. Poi rilancia `/factory run`: non serve riavviare la sessione.
 2. Avvia ogni riga `new`, `start`, `approve` e `resume`, nient'altro. Non giudicare i task
    da solo: ogni task nuovo va al triage, che decide.
 3. Ogni volta che un job arriva a uno stadio di attesa o finale, esegui di nuovo

@@ -576,3 +576,30 @@ def test_docs_subtask_runs_after_the_code(factory):
     assert [s["repo"] for s in subs][-1] == "docs" and "docs" in job["repos"]
     docs = factory.odoo.tasks_db[subs[-1]["task"]]
     assert docs["tag_ids"] == [] and "documentazione" in factory.odoo.notes[-1][2]
+
+
+def test_odoo_rereads_a_renewed_key_on_401(tmp_path, monkeypatch):
+    import io
+    import urllib.error
+
+    from software_factory import odoo as odoo_mod
+    creds = tmp_path / "odoo.json"
+    creds.write_text(json.dumps({"api_key": "old"}), encoding="utf-8")
+    cfg = {"odoo": {"url": "https://x", "db": "d", "credentials_file": str(creds), "project_id": 1,
+                    "stages": {}, "tags": {}, "users": {}}}
+    seen = []
+
+    def post(url, db, key, model, method, body):
+        seen.append(key)
+        if key != "new":
+            raise urllib.error.HTTPError(url, 401, "Unauthorized", {}, io.BytesIO(b'{"message": "Invalid apikey"}'))
+        return {"uid": 7}
+
+    monkeypatch.setattr(odoo_mod, "_post", post)
+    o = odoo_mod.Odoo(cfg, tmp_path / "ledger.json")
+    with pytest.raises(odoo_mod.OdooError, match="sf odoo-key"):
+        o.call("res.users", "context_get")
+    creds.write_text(json.dumps({"api_key": "new"}), encoding="utf-8")
+    assert o.call("res.users", "context_get") == {"uid": 7}
+    assert seen == ["old", "old", "new"]
+    assert odoo_mod.check_key(cfg, "new") == 7
