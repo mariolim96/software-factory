@@ -23,7 +23,7 @@ di ZazenCodes (vedi [NOTICE](NOTICE)). Il perché delle scelte è in [DESIGN.md]
 - [Requisiti](#requisiti)
 - [Installazione](#installazione)
 - [Configurazione](#configurazione)
-- [Uso quotidiano](#uso-quotidiano)
+- [Uso quotidiano](#uso-quotidiano) (e [rinnovo della chiave Odoo](#rinnovare-la-chiave-api-di-odoo))
 - [Agenti e profili](#agenti-e-profili)
 - [Gate](#gate)
 - [Review e merge automatici](#review-e-merge-automatici)
@@ -239,6 +239,29 @@ home. Alla fine stampa il riepilogo dei job e l'elenco di ciò che aspetta una p
 
 Dopo un aggiornamento della libreria apri una **sessione nuova** (non `claude --continue`), così
 Claude Code carica skill e agenti aggiornati.
+
+### Rinnovare la chiave API di Odoo
+
+Le chiavi API di Odoo scadono dopo la durata scelta alla creazione: su alcune istanze, un
+giorno. Quando la chiave scade, `sf` risponde `HTTP 401: Invalid apikey` e la factory si
+ferma. Per rinnovarla:
+
+1. In Odoo: avatar in alto a destra → Il mio profilo → Sicurezza dell'account → Nuova chiave
+   API. Scegli la durata più lunga disponibile e copia la chiave.
+2. In un tuo terminale, nella home:
+   ```bash
+   cd ~/factories/<progetto>
+   sf odoo-key                          # incolla la chiave: non viene mostrata
+   sf odoo-key --also <altra copia>     # se tieni il file delle credenziali anche altrove
+   ```
+   `sf odoo-key` prova la chiave su Odoo prima di salvarla: una chiave sbagliata non sostituisce
+   quella vecchia.
+3. Rilancia `/factory run`. Non serve riavviare la sessione: `sf` e il server MCP rileggono la
+   chiave al primo errore 401.
+
+Non incollare la chiave nella sessione di Claude Code: deve restare tra te, il file delle
+credenziali e `sf`. Per rinnovarla meno spesso, chiedi all'amministratore di Odoo una durata
+massima più lunga per le chiavi del tuo utente.
 
 ## Agenti e profili
 
