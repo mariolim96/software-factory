@@ -13,11 +13,14 @@ action is one of:
   start   a sub-task whose turn has come: run `next`, then spawn its spec-writer
   approve every factory sub-task of a parent is merged: run `next`, then spawn the approver
   new     a task tagged for the factory without a job: run `next` (sf create), then the triage
+  report  a task tagged for a front-end report: run `next` (sf report start), then spawn
+          fe-report; a report already open shows as `resume` (stage check)
   hold    would start, but every concurrency slot is busy
   wait    waits on a person (PM, team leader, front-end)
   error   a deterministic move failed: the note says why
 """
 
+from . import reports
 from .gate import base_report
 from .jobs import RUNNING
 from .util import Refused
@@ -31,8 +34,6 @@ def _settle(f, jobs, errors):
         try:
             st = j["stage"]
             if j["kind"] == "parent":
-                if f.fe_feedback(j):  # a report from the front-end: routed to the team leader
-                    j = f.load(j["id"])
                 if st in {"approve", "ready", "needs-human"} and f.parent_prs_merged(j):
                     j = f.locked(j["id"])
                     f.advance(j, "merged")
@@ -76,9 +77,8 @@ def queue(f):
     for j in jobs:
         st, tid, jid = j["stage"], f"T{j['task']}", j["id"]
         if j["kind"] == "parent":
-            fb = j.get("fe_feedback")
             if st in {"unclear", "ready", "needs-human"}:
-                if f.parent_answer(j):
+                if f.latest_instruction(j):
                     candidates.append(("resume", jid, tid, st, f"sf advance {jid} triage",
                                        "nuovo commento del PM o del team leader"))
                 else:
@@ -92,17 +92,8 @@ def queue(f):
                 else:
                     waits.append(("wait", jid, tid, st, "-", "in test dal PM"))
             elif st == "waiting-fe":
-                if fb and f.parent_answer(j):
-                    candidates.append(("resume", jid, tid, st, f"sf advance {jid} triage",
-                                       "il team leader ha risposto alla segnalazione del front-end"))
-                else:
-                    waits.append(("wait", jid, tid, st, "-",
-                                  "aspetta il team leader sulla segnalazione del front-end" if fb
-                                  else "aspetta i sottotask front-end"))
+                waits.append(("wait", jid, tid, st, "-", "aspetta i sottotask front-end"))
             elif st == "building":
-                if fb:
-                    waits.append(("wait", jid, tid, st, "-", "segnalazione del front-end al team leader: "
-                                  "la risposta si legge quando il back-end di questo ciclo è unito"))
                 subs = [by_id[s] for s in j["subs"]]
                 if subs and all(s["stage"] == "merged" for s in subs):
                     candidates.append(("approve", jid, tid, st, f"sf advance {jid} approve", "sottotask completi"))
@@ -124,9 +115,17 @@ def queue(f):
             else:
                 waits.append(("wait", jid, tid, st, "-", "aspetta una decisione del team leader"))
 
+    # reports from the front-end: one agent each, outside the concurrency slots (they only read)
+    for r in reports.all_reports(f):
+        if r["stage"] == "check":
+            rows.append(("resume", r["id"], f"T{r['fe_task']}", "check", "-", "fe-report"))
+    for t in reports.pending(f):
+        rows.append(("report", f"r{t['id']}", f"T{t['id']}", "-", f"sf report start {t['id']}", t["name"]))
+
     known = {j["task"] for j in jobs}
-    tagged = o.tasks([["stage_id", "=", o.stages["todo"]], ["tag_ids", "in", [o.tag_ids["queue"]]],
-                      ["parent_id", "=", False]], fields=["name"])
+    # sub-tasks too: the back-end task a front-end report opens lives under the reported task's parent
+    tagged = o.tasks([["stage_id", "=", o.stages["todo"]], ["tag_ids", "in", [o.tag_ids["queue"]]]],
+                     fields=["name"])
     for t in tagged:
         if t["id"] not in known:
             candidates.append(("new", "-", f"T{t['id']}", "-", f"sf create {t['id']}", t["name"]))

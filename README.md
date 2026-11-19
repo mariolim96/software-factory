@@ -117,6 +117,11 @@ controlli con cui viene giudicato.
 
 **Sviluppatore front-end** (quando il front-end non lo fa la factory)
 - Riceve i sottotask front-end in Odoo, con il contratto API del back-end, e li porta in Done.
+- Se il back-end non gli dà ciò che il suo task chiede, lo spiega in un commento e mette sul
+  task il tag della segnalazione (anche il team leader può metterlo). La factory verifica sul
+  codice: se manca davvero qualcosa crea un task back-end sotto lo stesso padre e lo mette in
+  coda; altrimenti risponde con una nota. Poi toglie il tag; rimetterlo apre una nuova
+  segnalazione.
 
 **Chi gestisce la factory**
 - Lancia `/factory run` dalla home, o lo programma.
@@ -200,7 +205,7 @@ sf init .        # dalla home: aggiorna agenti, skill e profili
 | `odoo.credentials_file` | Il file con la chiave API, fuori dalla home e dai repository. |
 | `odoo.project_id` | Il progetto i cui task sono la coda. |
 | `odoo.stages` | Gli id degli stadi `todo`, `in_progress`, `review`, `test`, `done`. |
-| `odoo.tags` | Gli id dei tag: `queue` (il tag della factory), `queue_fe` (anche il front-end alla factory), `frontend`, `backend`, `waiting_fe`, `escalation`. |
+| `odoo.tags` | Gli id dei tag: `queue` (il tag della factory), `queue_fe` (anche il front-end alla factory), `frontend`, `backend`, `waiting_fe`, `escalation`; facoltativo `report` (la segnalazione dal front-end). |
 | `odoo.users` | Gli id utente di `pm`, `team_leader` e `frontend` (chi riceve i sottotask front-end). |
 | `repos.<chiave>` | Ogni repository: `github`, `base_branch`, `profile`, e le regole che il profilo ha copiato (routing, revisori, percorsi). |
 | `concurrency` | Quanti job lavorano insieme. |

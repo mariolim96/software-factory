@@ -13,6 +13,8 @@
   sf gate --base [<repo>] [--force]   gate the integration branch(es) alone (cached per commit)
   sf merge <job>                  sync with the base, gate, merge the PR(s) (sub-task or parent)
   sf header <job>                 the line every agent prompt starts with
+  sf report start|close|header <task>     a front-end report: open it (prints the fe-report header),
+                                  act on its verdict.md, or reprint the header
   sf task <job|task>              (re)write task.md, or print any project task as the agents see it
   sf reviews <job>                refresh the round's verdicts; prints NEXT: wait|verify|merge|build|needs-human
   sf summary [<job>...]           table of jobs: stage, round, PR, cost
@@ -285,6 +287,16 @@ def main(argv=None):
             print(f"{job['id']}: {job['stage']}")
         elif cmd == "header" and len(args) == 1:
             print(f.header(f.resolve(args[0])))
+        elif cmd == "report" and len(args) == 2 and args[0] in {"start", "close", "header"}:
+            from . import reports
+            tid = reports.task_id(args[1])
+            if args[0] == "start":
+                print(reports.report_header(f, reports.start(f, tid)))
+            elif args[0] == "header":
+                print(reports.report_header(f, reports.open_report(f, tid)))
+            else:
+                rep = reports.close(f, tid)
+                print(f"{rep['id']}: {rep['verdict']}" + (f" → T{rep['task']}" if rep["task"] else ""))
         elif cmd == "task" and len(args) == 1:
             arg = args[0]
             try:
