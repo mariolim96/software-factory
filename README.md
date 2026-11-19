@@ -69,6 +69,9 @@ una PR piccola. Quando tutti i sottotask sono uniti, la PR del padre porta il la
 nel branch di integrazione (`main` o `develop`): la apre la factory, con rischio, test e come
 annullarla nella descrizione.
 
+I link alle PR sono anche in Odoo, come note interne: su ogni sottotask quando la sua PR viene
+aperta e quando viene unita, e sul task padre quando le PR del padre sono pronte.
+
 ### Stadi in Odoo
 
 | Factory | Odoo |

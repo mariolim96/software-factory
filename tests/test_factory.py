@@ -603,3 +603,38 @@ def test_odoo_rereads_a_renewed_key_on_401(tmp_path, monkeypatch):
     assert o.call("res.users", "context_get") == {"uid": 7}
     assert seen == ["old", "old", "new"]
     assert odoo_mod.check_key(cfg, "new") == 7
+
+
+def test_subtask_gets_the_pr_link_in_odoo(factory, monkeypatch):
+    job = factory.create(100)
+    (factory.dir(job["id"]) / "triage.md").write_text(PLAN)
+    job = factory.advance(factory.locked(job["id"]), "building")
+    sub = factory.load(job["subs"][0])
+    sub["stage"], sub["round"] = "build", 1
+    factory.save(sub)
+    (factory.dir(sub["id"]) / "build.md").write_text("STATUS: READY\n")
+
+    def git(cwd, *args, check=True):
+        if args[:1] == ("rev-list",):
+            return FakeRes("1\n")
+        if args[:1] == ("rev-parse",):
+            return FakeRes("abc\n")
+        return FakeRes()
+
+    url = "https://github.com/o/be/pull/5"
+
+    def gh_json(cwd, *args):
+        if args[:2] == ("pr", "list"):
+            return [{"number": 5, "url": url, "baseRefName": sub["base"]}]
+        return {"state": "MERGED"}
+
+    monkeypatch.setattr(jobs_mod, "git", git)
+    monkeypatch.setattr(jobs_mod, "gh_json", gh_json)
+    sub = factory.advance(factory.locked(sub["id"]), "gate")
+    tid, title, text = factory.odoo.notes[-1]
+    assert (tid, title) == (sub["task"], "pull request") and url in text
+    sub["stage"] = "merging"
+    factory.save(sub)
+    factory.advance(factory.locked(sub["id"]), "merged")
+    tid, title, text = factory.odoo.notes[-1]
+    assert (tid, title) == (sub["task"], "unito") and url in text

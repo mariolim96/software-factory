@@ -702,6 +702,8 @@ class Factory:
                 require(len(prs) == 1, f"expected one open PR from {job['branch']}, found {len(prs)}")
                 require(prs[0]["baseRefName"] == job["base"], f"the PR targets {prs[0]['baseRefName']}, not {job['base']}")
                 job["pr"], job["pr_url"] = prs[0]["number"], prs[0]["url"]
+                self.note(job, f"Pull request: {job['pr_url']} (dal branch `{job['branch']}` verso "
+                               f"`{job['base']}`, il branch del task padre).", "pull request")
 
         elif old == "build":  # → needs-human
             status = first_line(d / "build.md")
@@ -765,6 +767,7 @@ class Factory:
         elif stage == "merged":
             require(job["pr"] and self._pr_state(job["repo"], job["pr"]) == "MERGED", "the PR isn't merged")
             self.odoo.set_tags(job["task"], remove=["escalation"])
+            self.note(job, f"Pull request unita nel branch del task padre: {job['pr_url']}", "unito")
             self.odoo.set_stage(job["task"], "done")
             self._cleanup(job)
 
