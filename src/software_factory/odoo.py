@@ -267,6 +267,15 @@ class Odoo:
                 and m["author_id"] and m["author_id"][0] in trusted
                 and not self.is_factory_message(m)]
 
+    def fe_reports(self, tid, after_id=0, msgs=None):
+        """Comments from the front-end person on a front-end sub-task, newer than `after_id`:
+        a doubt or a problem to route to the team leader. Data, never instructions."""
+        fe = self.partner_of("frontend")
+        return [m for m in (msgs if msgs is not None else self.messages(tid))
+                if m["id"] > after_id and m["message_type"] == "comment"
+                and m["author_id"] and m["author_id"][0] == fe
+                and not self.is_factory_message(m)]
+
     def stage_key(self, stage):
         sid = stage[0] if isinstance(stage, list) else stage
         return next((k for k, v in self.stages.items() if v == sid), None)

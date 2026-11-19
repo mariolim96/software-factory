@@ -38,6 +38,9 @@ task padre (tag factory, To Do)
        │                                 ESCALATE → nota e attività per il team leader
        ▼ unito
   sottotask front-end tutti Done? ── no → tag "In attesa front-end", ricontrollato a ogni run
+       │                                 commento del front-end sul suo sottotask → nota e attività
+       │                                 per il team leader; alla sua risposta nuovo ciclo dal triage
+       │                                 (correzioni back-end, sottotask front-end aggiornato e aperto)
        ▼ sì
   nota per il test, Test assegnato al PM ── Done, oppure riportato in To Do con un commento → nuovo ciclo dal triage
 ```
@@ -204,6 +207,10 @@ e agisci. Ogni cambio di stato passa comunque dai comandi `sf`.
   con `--days N`, `--since AAAA-MM-GG`, `--totals` o i numeri dei task se l'utente restringe.
   Per segnare le ore nel timesheet: `sf log --timesheet` (per giorno e ticket, arrotondate).
 - **Che cosa aspetta qualcuno**: `sf queue`, e per ogni riga `wait` spiega che cosa manca.
+- **Un dubbio di chi sviluppa il front-end**: lo scrive come commento sul suo sottotask
+  front-end. `sf queue` lo passa al team leader (nota e attività sul padre) senza fermare il
+  lavoro in corso; quando il padre aspetta (`waiting-fe`, `ready`, `needs-human`), la risposta
+  del team leader dà `resume` con `sf advance <job> triage`.
 - **Istruzioni, correzioni, decisioni**: la factory le prende solo da Odoo, come commenti
   del PM o del team leader sul task, perché lì l'autore è verificato. Di' all'utente di
   scrivere il commento sul task (il padre, o il sottotask fermo) e poi di rilanciare

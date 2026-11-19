@@ -31,6 +31,8 @@ def _settle(f, jobs, errors):
         try:
             st = j["stage"]
             if j["kind"] == "parent":
+                if f.fe_feedback(j):  # a report from the front-end: routed to the team leader
+                    j = f.load(j["id"])
                 if st in {"approve", "ready", "needs-human"} and f.parent_prs_merged(j):
                     j = f.locked(j["id"])
                     f.advance(j, "merged")
@@ -74,8 +76,9 @@ def queue(f):
     for j in jobs:
         st, tid, jid = j["stage"], f"T{j['task']}", j["id"]
         if j["kind"] == "parent":
+            fb = j.get("fe_feedback")
             if st in {"unclear", "ready", "needs-human"}:
-                if f.latest_instruction(j):
+                if f.parent_answer(j):
                     candidates.append(("resume", jid, tid, st, f"sf advance {jid} triage",
                                        "nuovo commento del PM o del team leader"))
                 else:
@@ -89,8 +92,17 @@ def queue(f):
                 else:
                     waits.append(("wait", jid, tid, st, "-", "in test dal PM"))
             elif st == "waiting-fe":
-                waits.append(("wait", jid, tid, st, "-", "aspetta i sottotask front-end"))
+                if fb and f.parent_answer(j):
+                    candidates.append(("resume", jid, tid, st, f"sf advance {jid} triage",
+                                       "il team leader ha risposto alla segnalazione del front-end"))
+                else:
+                    waits.append(("wait", jid, tid, st, "-",
+                                  "aspetta il team leader sulla segnalazione del front-end" if fb
+                                  else "aspetta i sottotask front-end"))
             elif st == "building":
+                if fb:
+                    waits.append(("wait", jid, tid, st, "-", "segnalazione del front-end al team leader: "
+                                  "la risposta si legge quando il back-end di questo ciclo è unito"))
                 subs = [by_id[s] for s in j["subs"]]
                 if subs and all(s["stage"] == "merged" for s in subs):
                     candidates.append(("approve", jid, tid, st, f"sf advance {jid} approve", "sottotask completi"))

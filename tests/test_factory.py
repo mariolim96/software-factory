@@ -65,6 +65,17 @@ class FakeOdoo:
     def instructions(self, tid, after_id=0, msgs=None):
         return [m for m in self.msgs if m["task"] == tid and m["id"] > after_id]
 
+    reports = ()
+
+    def fe_reports(self, tid, after_id=0, msgs=None):
+        return [m for m in self.reports if m["task"] == tid and m["id"] > after_id]
+
+    def messages(self, tid):
+        return sorted([m for m in [*self.msgs, *self.reports] if m["task"] == tid], key=lambda m: m["id"])
+
+    def trusted_partners(self):
+        return {24: "PM", 26: "team leader"}
+
     def create_subtask(self, parent, name, text, tags, user_ids):
         self.next_id += 1
         self.tasks_db[self.next_id] = {"id": self.next_id, "name": name, "stage_id": [1, "TO DO"],
@@ -391,6 +402,107 @@ def test_reopened_by_pm_starts_a_new_cycle(factory):
     assert job["repos"] == {} and job["past"][0]["repos"]["be"]["branch"] == "factory/t100"
     assert (factory.dir(job["id"]) / "cycle-1" / "triage.md").exists()
     assert job["past"][0]["fe_tasks"]
+
+
+def _comment(o, tid, author, text, report=False):
+    o.next_id += 1
+    m = {"task": tid, "id": o.next_id, "author_id": author, "date": "2026-11-19 10:35:10",
+         "body": f"<p>{text}</p>", "message_type": "comment", "attachment_ids": []}
+    if report:
+        o.reports = [*o.reports, m]
+    else:
+        o.msgs.append(m)
+    return m
+
+
+FIX_PLAN = """DECISION: PLAN
+RISK: high
+SURFACES: security
+
+## Nota per il ticket
+Il back-end espone come l'azienda accede alla pratica.
+
+## Piano
+
+```json
+{"contract": "GET /istanze/{id}: ruoloAccesso", "backend": [{"title": "ruoloAccesso", "brief": "campo", "risk": "high"}],
+ "frontend": [{"title": "Step 3", "brief": "usa ruoloAccesso", "task": "T%d"}]}
+```
+"""
+
+
+def test_front_end_report_goes_to_the_team_leader_then_a_new_cycle(factory, monkeypatch):
+    from software_factory import queue as queue_mod
+    monkeypatch.setattr(queue_mod, "base_report", lambda home, key: ("PASS", "abc1234", ""))
+    o = factory.odoo
+    job = factory.create(100)
+    (factory.dir(job["id"]) / "triage.md").write_text(PLAN)
+    job = factory.advance(factory.locked(job["id"]), "building")
+    fe = job["fe_tasks"][0]
+
+    # the front-end person comments while the back-end is being built: routed, nothing stops
+    _comment(o, fe, [8, "Ale"], "Il FE non sa se chi guarda è una consorziata", report=True)
+    rows = queue_mod.queue(factory)
+    job = factory.load(job["id"])
+    assert job["stage"] == "building" and job["fe_feedback"]["tasks"] == [fe]
+    assert o.notes[-2][:2] == (100, "segnalazione dal front-end") and "consorziata" in o.notes[-2][2]
+    assert o.notes[-1][:2] == (fe, "segnalazione ricevuta")
+    assert o.activities[-1][:2] == (100, "team_leader")
+    assert o.tag_ids["escalation"] in o.tasks_db[100]["tag_ids"]
+    assert any(r[0] == "wait" and r[1] == job["id"] and "segnalazione" in r[5] for r in rows)
+    n = len(o.notes)
+    queue_mod.queue(factory)
+    assert len(o.notes) == n  # the same comment isn't routed twice
+
+    # the team leader answers on the sub-task; then the back-end is merged and a later note
+    # ("in attesa del front-end") must not hide the answer
+    with pytest.raises(Refused, match="not a legal transition"):
+        factory.advance(factory.locked(job["id"]), "triage")
+    _comment(o, fe, [26, "Mario"], "Aggiungiamo ruoloAccesso nel dettaglio")
+    job = factory.locked(job["id"])
+    job["stage"] = "merged"
+    factory.deliver(job)
+    assert job["stage"] == "waiting-fe" and job["last_note"] > job["fe_feedback"]["note"]
+    rows = queue_mod.queue(factory)
+    assert ("resume", job["id"], "T100", "waiting-fe", f"sf advance {job['id']} triage") in [r[:5] for r in rows]
+
+    job = factory.advance(factory.locked(job["id"]), "triage")
+    d = factory.dir(job["id"])
+    assert job["cycle"] == 2 and job["fe_tasks"] == [fe] and job["fe_feedback"] is None
+    assert o.tag_ids["waiting_fe"] not in o.tasks_db[100]["tag_ids"]
+    assert o.tag_ids["escalation"] not in o.tasks_db[100]["tag_ids"]
+    text = (d / "fe-feedback.md").read_text(encoding="utf-8")
+    assert "> Il FE non sa se chi guarda è una consorziata" in text  # quoted: data
+    assert "Mario (team leader) su T%d" % fe in text and "\nAggiungiamo ruoloAccesso" in text  # instruction
+    assert (d / "cycle-1" / "triage.md").exists()
+
+    # the triage plans the back-end fix and updates the open front-end sub-task, not a new one
+    (d / "triage.md").write_text(FIX_PLAN % fe)
+    tasks = len(o.tasks_db)
+    job = factory.advance(factory.locked(job["id"]), "building")
+    assert len(o.tasks_db) == tasks + 1 and job["fe_tasks"] == [fe] and len(job["subs"]) == 1
+    assert any(t == fe and title == "aggiornamento del sottotask" and "ruoloAccesso" in body
+               for t, title, body in o.notes)
+    assert factory.branch_name(job) == "factory/t100-c2"
+
+
+def test_a_comment_in_waiting_fe_without_a_report_restarts_nothing(factory):
+    o = factory.odoo
+    job = factory.create(100)
+    (factory.dir(job["id"]) / "triage.md").write_text(PLAN)
+    job = factory.advance(factory.locked(job["id"]), "building")
+    job["stage"] = "merged"
+    factory.deliver(job)
+    _comment(o, 100, [24, "Livia"], "ok grazie")
+    with pytest.raises(Refused, match="no open report"):
+        factory.advance(job, "triage")
+
+
+def test_plan_can_only_update_an_open_front_end_subtask(factory):
+    job = factory.create(100)
+    (factory.dir(job["id"]) / "triage.md").write_text(FIX_PLAN % 999)
+    with pytest.raises(Refused, match="T999 isn't an open front-end sub-task"):
+        factory.advance(factory.locked(job["id"]), "building")
 
 
 def test_plan_validation(tmp_path):
