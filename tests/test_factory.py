@@ -875,3 +875,24 @@ def test_e2e_failures_already_on_main_dont_count(factory, monkeypatch):
     assert factory.e2e(job["id"])[0] == "PASS"
     assert runs == ["_base", job["id"], job["id"]]  # the reference is cached per commit
     assert factory.advance(factory.locked(job["id"]), "merging")["stage"] == "merging"
+
+
+def test_team_leader_comments_are_instructions_and_factory_notes_are_not(tmp_path):
+    """The factory posts with the team leader's key: only the ledger and the mark tell its notes apart."""
+    from software_factory import odoo as odoo_mod
+    assert odoo_mod.MARK.strip()
+    o = odoo_mod.Odoo.__new__(odoo_mod.Odoo)
+    o.ledger_path = tmp_path / "ledger.json"
+    o.trusted_partners = lambda: {7: "team leader"}
+    o._remember(3)
+
+    def msg(mid, body):
+        return {"id": mid, "message_type": "comment", "author_id": [7, "Mario"], "body": body}
+
+    msgs = [msg(1, "<p>fai anche il filtro per data</p>"),
+            msg(2, f"<p><b>{odoo_mod.MARK} · domande</b></p><p>x</p>"),
+            msg(3, "<p>nota senza marcatore, nel registro</p>"),
+            msg(4, "<p><b>🤖 Factory · vecchia nota</b></p>"),
+            msg(5, "<p>ok, procedi</p>")]
+    assert [m["id"] for m in o.instructions(0, msgs=msgs)] == [1, 5]
+    assert [m["id"] for m in o.instructions(0, after_id=2, msgs=msgs)] == [5]

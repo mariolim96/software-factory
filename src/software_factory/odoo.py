@@ -19,7 +19,10 @@ import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
 
-MARK = ""
+# Never empty: every text starts with "", so an empty MARK would hide every comment.
+MARK = "[Software factory]"
+OLD_MARKS = ("🤖 Factory",)  # notes posted before the current MARK
+assert MARK, "MARK can't be empty"
 
 
 class OdooError(Exception):
@@ -216,7 +219,7 @@ class Odoo:
         self.ledger_path.write_text(json.dumps(sorted(ids)))
 
     def is_factory_message(self, msg):
-        return msg["id"] in self._ledger() or html_to_text(msg["body"]).startswith(MARK)
+        return msg["id"] in self._ledger() or html_to_text(msg["body"]).startswith((MARK, *OLD_MARKS))
 
     # -- reads
 
