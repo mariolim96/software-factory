@@ -614,57 +614,70 @@ class Factory:
                     f"the E2E tests failed and e2e.mode is blocking: see {self.dir(job['id'])}/e2e/e2e.md")
 
     def _post_e2e_failures(self, job):
-        """info mode: failed E2E tests don't stop the merge, but the team leader hears about them."""
+        """info mode: tests the task broke don't stop the merge, but the team leader hears about them."""
         e = job.get("e2e")
         if not e or e["verdict"] == "PASS" or e.get("posted"):
             return
         d = self.dir(job["id"]) / "decision.md"
         triage = ((section(d, "E2E") or "") if d.exists() else "").strip() or "L'approver non li ha classificati."
-        counts = ", ".join(f"{v} {k}" for k, v in (("passati", e.get("passed")), ("falliti", e.get("failed")),
-                                                    ("instabili", e.get("flaky"))) if v is not None)
-        text = (f"I test end-to-end sul lavoro completo sono falliti{f' ({counts})' if counts else ''}. Per ora "
-                "sono informativi: non hanno bloccato il merge. Classificazione dei fallimenti fatta "
-                f"dall'approver:\n\n{triage}")
+        what = (f"{e['new']} test che su main passano" if e.get("new") is not None
+                else "l'esecuzione non è arrivata in fondo")
+        text = (f"I test end-to-end sul lavoro completo sono falliti: {what}. Per ora sono informativi: non hanno "
+                f"bloccato il merge. Classificazione dei fallimenti fatta dall'approver:\n\n{triage}")
         self.note(job, text, "test end-to-end")
         self.odoo.activity(job["task"], "team_leader", f"Factory: test end-to-end falliti su T{job['task']}", text)
         e["posted"] = True
 
-    def e2e(self, job_id):
-        """Run the home's E2E script on the parent branches of a parent in approve.
+    # The reference: the same script on the integration branches, once per set of commits. A parent
+    # is judged only by the tests it breaks, not by the ones already red on the integration branches.
 
-        Repositories the task didn't touch run at their integration branch. One run at a
-        time per home: the stack and its database are shared. The job isn't held meanwhile.
-        """
+    def _e2e_script(self):
         mode = e2e_mode(self.cfg)
         require(mode != "off", "e2e.mode is off in factory.json")
         script = self.home.root / (self.cfg.get("e2e") or {}).get("script", "checks/e2e.sh")
         require(script.exists(), f"{script} doesn't exist")
-        job = self.load(job_id)
-        require(job["kind"] == "parent" and job["stage"] == "approve", f"{job_id} isn't a parent in approve")
-        lock = None
-        if fcntl:
-            lock = open(self.home.jobs / ".e2e.lock", "w")
-            fcntl.flock(lock, fcntl.LOCK_EX)  # waits for the run of another parent
-        out = self.dir(job_id) / "e2e"
+        return mode, script
+
+    def _e2e_lock(self):
+        """One run at a time per home: the stack and its database are shared. Blocks."""
+        if not fcntl:
+            return None
+        self.home.jobs.mkdir(parents=True, exist_ok=True)
+        lock = open(self.home.jobs / ".e2e.lock", "w")
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return lock
+
+    def _base_commits(self):
+        out = {}
+        for key in repo_order(self.home.repo_keys()):
+            repo, base = self.home.repo_path(key), self.home.base(key)
+            git(repo, "fetch", "origin", base)
+            out[key] = git(repo, "rev-parse", f"origin/{base}").stdout.strip()
+        return out
+
+    def _base_e2e_dir(self, commits):
+        return self.home.jobs / "_base" / ("e2e-" + "-".join(f"{k}{c[:10]}" for k, c in commits.items()))
+
+    def _run_e2e(self, script, tag, out, own):
+        """Run the script. `own`: {key: (worktree, changed files, label)} for the repositories at
+        a branch of the task; the others get a temporary checkout of their integration branch."""
         shutil.rmtree(out, ignore_errors=True)
         out.mkdir(parents=True)
-        env = dict(os.environ, FACTORY_JOB=job_id, FACTORY_HOME=str(self.home.root), FACTORY_E2E_OUT=str(out))
-        commits, where, temps = self._parent_commits(job), [], []
-        start, t0 = now(), time.monotonic()
+        env = dict(os.environ, FACTORY_JOB=tag, FACTORY_HOME=str(self.home.root), FACTORY_E2E_OUT=str(out))
+        where, temps, t0 = [], [], time.monotonic()
         try:
             for key in repo_order(self.home.repo_keys()):
-                r = job["repos"].get(key)
-                if r and r.get("worktree"):
-                    wt, files = r["worktree"], self.changed_files(r["worktree"], f"origin/{self.home.base(key)}")
-                    where.append(f"{key}: {r['branch']} ({commits[key][:7]})")
+                if key in own:
+                    wt, files, label = own[key]
                 else:
                     repo, base, wt, files = self.home.repo_path(key), self.home.base(key), \
-                        self.home.worktrees / f"_e2e-{job_id}-{key}", []
+                        self.home.worktrees / f"_e2e-{tag}-{key}", []
                     git(repo, "fetch", "origin", base)
                     git(repo, "worktree", "remove", "--force", str(wt), check=False)
                     git(repo, "worktree", "add", "--detach", str(wt), f"origin/{base}")
                     temps.append((repo, wt))
-                    where.append(f"{key}: {base}")
+                    label = base
+                where.append(f"{key}: {label}")
                 changed = out / f"changed-{key}.txt"
                 changed.write_text("".join(f"{p}\n" for p in files), encoding="utf-8")
                 env[f"FACTORY_WORKTREE_{key.upper()}"] = str(wt)
@@ -673,27 +686,109 @@ class Factory:
         finally:
             for repo, wt in temps:
                 git(repo, "worktree", "remove", "--force", str(wt), check=False)
-            if lock:
-                lock.close()
-        seconds = int(time.monotonic() - t0)
-        verdict = "PASS" if res.returncode == 0 else "FAIL"
         log = f"{res.stdout}{res.stderr}"
         (out / "e2e.log").write_text(log, encoding="utf-8")
-        summary = out / "summary.md"  # optional, written by the script: PASSED/FAILED/FLAKY lines, then text
+        summary, failed = out / "summary.md", out / "failed.txt"
         counts = {k.lower(): int(v) for k, v in (header(summary) if summary.exists() else {}).items()
                   if k in {"PASSED", "FAILED", "FLAKY"} and str(v).strip().isdigit()}
-        detail = summary.read_text(encoding="utf-8").partition("\n\n")[2].strip() if summary.exists() else ""
-        tail = "\n".join(log.rstrip().splitlines()[-80:])
-        result = "sono passati" if verdict == "PASS" else f"sono falliti con exit {res.returncode}"
-        (out / "e2e.md").write_text(
-            f"E2E: {verdict}\nCOMMITS: {' '.join(f'{k}={c}' for k, c in commits.items())}\nMODE: {mode}\n\n"
-            f"## Summary\n- I test end-to-end {result} in {seconds}s\n- Codice provato: {'; '.join(where)}\n"
-            + "".join(f"- {k}: {v}\n" for k, v in counts.items())
-            + (f"\n## Dettaglio\n{detail}\n" if detail else "")
-            + f"\n## Log\nUltime 80 righe di e2e.log:\n\n```\n{tail}\n```\n", encoding="utf-8")
+        return {
+            "code": res.returncode, "seconds": int(time.monotonic() - t0), "where": where, "log": log,
+            "counts": counts,
+            # one failed test per line, written by the script; None: no list (the run didn't get that far)
+            "failed_tests": sorted({x.strip() for x in failed.read_text(encoding="utf-8").splitlines() if x.strip()})
+                      if failed.exists() else None,
+            "detail": summary.read_text(encoding="utf-8").partition("\n\n")[2].strip() if summary.exists() else "",
+        }
+
+    def _e2e_base(self, script, force=False):
+        """The reference run on the integration branches, cached per commit. Call with the lock held."""
+        commits = self._base_commits()
+        d = self._base_e2e_dir(commits)
+        ref = d / "base.json"
+        if ref.exists() and not force:
+            return json.loads(ref.read_text(encoding="utf-8"))
+        r = self._run_e2e(script, "_base", d, {})
+        base = {"commits": commits, "code": r["code"], "failed_tests": r["failed_tests"], "at": now(),
+                **r["counts"]}
+        self._e2e_report(d / "e2e.md", "PASS" if r["code"] == 0 else "FAIL", commits, None, r)
+        ref.write_text(json.dumps(base, indent=2) + "\n", encoding="utf-8")
+        return base
+
+    def e2e_base(self, force=False):
+        _, script = self._e2e_script()
+        lock = self._e2e_lock()
+        try:
+            base = self._e2e_base(script, force)
+        finally:
+            if lock:
+                lock.close()
+        return base, self._base_e2e_dir(base["commits"]) / "e2e.md"
+
+    @staticmethod
+    def _e2e_report(path, verdict, commits, mode, r, base=None, new=None, old=None):
+        tail = "\n".join(r["log"].rstrip().splitlines()[-80:])
+        lines = [f"E2E: {verdict}", f"COMMITS: {' '.join(f'{k}={c}' for k, c in commits.items())}"]
+        if mode:
+            lines.append(f"MODE: {mode}")
+        if base:
+            lines.append(f"BASE: {' '.join(f'{k}={c}' for k, c in base['commits'].items())}")
+        body = ["", "## Summary",
+                f"- Exit {r['code']} in {r['seconds']}s" + (": problema di ambiente" if r["code"] == 3 else ""),
+                f"- Codice provato: {'; '.join(r['where'])}"]
+        body += [f"- {k}: {v}" for k, v in r["counts"].items()]
+        if base is not None:
+            if base.get("failed_tests") is None:
+                body.append("- Riferimento sui branch di integrazione non disponibile (non è arrivato in fondo): "
+                            "ogni fallimento conta come nuovo")
+            else:
+                body.append(f"- Sui branch di integrazione falliscono già {len(base['failed_tests'])} test")
+        if new is not None:
+            body += ["", "## Nuovi fallimenti",
+                     "Test che falliscono qui e non sui branch di integrazione: sono quelli da giudicare.", ""]
+            body += [f"- {t}" for t in new] or ["Nessuno."]
+            body += ["", "## Già falliti sui branch di integrazione",
+                     "Falliscono anche senza questo task: non dipendono da lui.", ""]
+            body += [f"- {t}" for t in old] or ["Nessuno."]
+        if r["detail"]:
+            body += ["", "## Dettaglio", r["detail"]]
+        body += ["", "## Log", "Ultime 80 righe di e2e.log:", "", "```", tail, "```", ""]
+        path.write_text("\n".join(lines + body), encoding="utf-8")
+
+    def e2e(self, job_id):
+        """Run the home's E2E script on the parent branches of a parent in approve, after the
+        reference run on the integration branches (cached per commit). The verdict counts only the
+        tests that fail here and not there. The job isn't held meanwhile."""
+        mode, script = self._e2e_script()
+        job = self.load(job_id)
+        require(job["kind"] == "parent" and job["stage"] == "approve", f"{job_id} isn't a parent in approve")
+        commits = self._parent_commits(job)
+        own = {k: (r["worktree"], self.changed_files(r["worktree"], f"origin/{self.home.base(k)}"),
+                   f"{r['branch']} ({commits[k][:7]})")
+               for k, r in job["repos"].items() if r.get("worktree")}
+        out = self.dir(job_id) / "e2e"
+        start = now()
+        lock = self._e2e_lock()
+        try:
+            base = self._e2e_base(script)
+            r = self._run_e2e(script, job_id, out, own)
+        finally:
+            if lock:
+                lock.close()
+        known = set(base["failed_tests"] or [])
+        if r["failed_tests"] is None:  # no list: the run broke before or during the tests
+            new = old = None
+            verdict = "PASS" if r["code"] == 0 else "FAIL"
+        else:
+            new = [t for t in r["failed_tests"] if t not in known]
+            old = [t for t in r["failed_tests"] if t in known]
+            verdict = "FAIL" if new or r["code"] not in {0, 1} else "PASS"
+        self._e2e_report(out / "e2e.md", verdict, commits, mode, r, base, new, old)
         job = self.locked(job_id)
-        job["e2e"] = {"verdict": verdict, "commits": commits, "at": now(), **counts}
-        job.setdefault("e2e_runs", []).append({"at": now(), "verdict": verdict, **counts})
+        e = {"verdict": verdict, "commits": commits, "at": now(), **r["counts"]}
+        if new is not None:
+            e.update(new=len(new), preexisting=len(old))
+        job["e2e"] = e
+        job.setdefault("e2e_runs", []).append({k: v for k, v in e.items() if k != "commits"})
         self._worked(job, "e2e", verdict, start)
         self.save(job)
         return verdict, out / "e2e.md"

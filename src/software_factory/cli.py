@@ -12,7 +12,9 @@
   sf gate <job>                   run the gate on a sub-task in gate → round-N/checks.md
   sf gate --base [<repo>] [--force]   gate the integration branch(es) alone (cached per commit)
   sf e2e <job>                    end-to-end tests of a parent in approve, on its parent branches
-                                  → jobs/<job>/e2e/e2e.md (one run at a time; needs e2e.mode in factory.json)
+                                  → jobs/<job>/e2e/e2e.md (one run at a time; needs e2e.mode in factory.json);
+                                  only the tests that pass on the integration branches count
+  sf e2e --base [--force]         the reference run on the integration branches (cached per commit)
   sf merge <job>                  sync with the base, gate, merge the PR(s) (sub-task or parent)
   sf header <job>                 the line every agent prompt starts with
   sf report start|close|header <task>     a front-end report: open it (prints the fe-report header),
@@ -289,6 +291,9 @@ def main(argv=None):
                 print(f"\nPercorsi protetti modificati (il gate fallirà): {', '.join(protected)}")
             print(f"\nCHECKS: {'PASS' if code == 0 and not protected else 'FAIL'} (exit {code}, {seconds}s)")
             return 0 if code == 0 and not protected else 1
+        elif cmd == "e2e" and args[:1] == ["--base"]:
+            base, report = f.e2e_base(force="--force" in args)
+            print(f"E2E base: {len(base['failed_tests'] or [])} test falliti sui branch di integrazione: {report}")
         elif cmd == "e2e" and len(args) == 1:
             verdict, report = f.e2e(f.resolve(args[0])["id"])
             print(f"E2E: {verdict}: {report}")

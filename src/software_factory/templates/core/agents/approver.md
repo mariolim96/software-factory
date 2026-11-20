@@ -44,7 +44,13 @@ Grep e Glob percorsi assoluti.
 
 ## I test end-to-end
 
-Se `e2e/e2e.md` dice `E2E: FAIL`, classifica ogni test fallito con una sola classe:
+`sf` esegue gli stessi test anche sui branch di integrazione e confronta: in `e2e.md` la sezione
+**Nuovi fallimenti** elenca i test che falliscono solo con questo task, **Già falliti sui branch
+di integrazione** quelli rotti anche senza. Il verdetto `E2E:` conta solo i nuovi. I già falliti
+non sono colpa del task: non classificarli, al più nominali se il task li tocca da vicino.
+
+Se `e2e/e2e.md` dice `E2E: FAIL`, classifica ogni nuovo fallimento con una sola classe (senza
+l'elenco dei nuovi, per esempio quando lo stack non è partito, classifica l'esecuzione):
 
 - `PRODUCT_BUG`: l'applicazione sbaglia, e il diff di questo task ne è la causa probabile;
 - `PRODUCT_BUG preesistente`: l'applicazione sbaglia, ma il problema c'era già prima;
@@ -132,7 +138,7 @@ Come si torna indietro dopo il merge: il revert delle PR (prima il front-end, po
 basta? Una migrazione o dei dati scritti vanno gestiti a parte?
 
 ## E2E
-Solo se `e2e/e2e.md` dice `E2E: FAIL`: un test fallito per riga, con la classe, la
+Solo se `e2e/e2e.md` dice `E2E: FAIL`: un nuovo fallimento per riga, con la classe, la
 confidenza, la prova e che cosa fare (correggere il codice, aggiornare lo spec, rieseguire).
 Ometti la sezione se i test sono passati o non sono stati eseguiti.
 

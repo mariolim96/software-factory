@@ -816,21 +816,33 @@ def test_e2e_runs_before_the_approver_and_informs_the_team_leader(factory, monke
     with pytest.raises(Refused, match="sf e2e"):
         factory.advance(factory.locked(job["id"]), "merging")
 
+    runs = []
+    failing = {"_base": ["vecchio.spec.ts › rotto su main"],
+               job["id"]: ["vecchio.spec.ts › rotto su main", "login.spec.ts › il titolo"]}
+
     def script(cmd, cwd, check=True, input=None, env=None):
         if cmd[:1] == ["bash"]:
-            out = jobs_mod.Path(env["FACTORY_E2E_OUT"])
-            assert env["FACTORY_WORKTREE_BE"] == str(factory.home.root) and "FACTORY_WORKTREE_FE" in env
-            assert (out / "changed-be.txt").read_text() == "src/App.java\n"
-            (out / "summary.md").write_text("PASSED: 23\nFAILED: 1\nFLAKY: 2\n\n- login.spec.ts fallito\n")
-            return FakeRes("1 failed", code=1)
+            tag, out = env["FACTORY_JOB"], jobs_mod.Path(env["FACTORY_E2E_OUT"])
+            runs.append(tag)
+            if tag == job["id"]:
+                assert env["FACTORY_WORKTREE_BE"] == str(factory.home.root) and "FACTORY_WORKTREE_FE" in env
+                assert (out / "changed-be.txt").read_text() == "src/App.java\n"
+            else:
+                assert "_e2e-_base-be" in env["FACTORY_WORKTREE_BE"]
+            (out / "summary.md").write_text(f"PASSED: 23\nFAILED: {len(failing[tag])}\nFLAKY: 2\n\n- dettaglio\n",
+                                            encoding="utf-8")
+            (out / "failed.txt").write_text("\n".join(failing[tag]) + "\n", encoding="utf-8")
+            return FakeRes("failed", code=1)
         return FakeRes()
 
     monkeypatch.setattr(jobs_mod, "run", script)
     verdict, report = factory.e2e(job["id"])
     text = report.read_text(encoding="utf-8")
-    assert verdict == "FAIL" and text.startswith("E2E: FAIL\n") and "login.spec.ts fallito" in text
+    assert runs == ["_base", job["id"]] and verdict == "FAIL" and text.startswith("E2E: FAIL\n")
+    new, old = text.split("## Nuovi fallimenti")[1].split("## Già falliti")
+    assert "login.spec.ts › il titolo" in new and "rotto su main" not in new and "rotto su main" in old
     job = factory.load(job["id"])
-    assert job["e2e"]["failed"] == 1 and job["e2e_runs"][-1]["flaky"] == 2
+    assert job["e2e"]["new"] == 1 and job["e2e"]["preexisting"] == 1 and job["e2e_runs"][-1]["flaky"] == 2
     assert job["work"][-1]["what"] == "e2e"
     factory.cfg["e2e"] = {"mode": "blocking"}
     with pytest.raises(Refused, match="blocking"):
@@ -838,5 +850,28 @@ def test_e2e_runs_before_the_approver_and_informs_the_team_leader(factory, monke
     factory.cfg["e2e"] = {"mode": "info"}
     job = factory.advance(factory.locked(job["id"]), "merging")
     tid, title, note = factory.odoo.notes[-1]
-    assert title == "test end-to-end" and "TEST_BUG" in note and "23 passati" in note
+    assert title == "test end-to-end" and "TEST_BUG" in note and "1 test che su main passano" in note
     assert factory.odoo.activities[-1][1] == "team_leader" and job["e2e"]["posted"]
+
+
+def test_e2e_failures_already_on_main_dont_count(factory, monkeypatch):
+    job = _approved(factory, monkeypatch, "APPROVE\nRISK: low\nNEEDS-HUMAN: no\n",
+                    {"low": "auto", "medium": "auto", "high": "auto"})
+    factory.save(job)
+    factory.cfg["e2e"] = {"mode": "blocking"}
+    (factory.home.root / "checks").mkdir()
+    (factory.home.root / "checks" / "e2e.sh").write_text("exit 1\n")
+    runs = []
+
+    def script(cmd, cwd, check=True, input=None, env=None):
+        if cmd[:1] == ["bash"]:
+            runs.append(env["FACTORY_JOB"])
+            (jobs_mod.Path(env["FACTORY_E2E_OUT"]) / "failed.txt").write_text("a.spec.ts › rotto\n", encoding="utf-8")
+            return FakeRes("failed", code=1)
+        return FakeRes()
+
+    monkeypatch.setattr(jobs_mod, "run", script)
+    assert factory.e2e(job["id"])[0] == "PASS"
+    assert factory.e2e(job["id"])[0] == "PASS"
+    assert runs == ["_base", job["id"], job["id"]]  # the reference is cached per commit
+    assert factory.advance(factory.locked(job["id"]), "merging")["stage"] == "merging"

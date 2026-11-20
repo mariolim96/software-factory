@@ -335,8 +335,15 @@ padre, quando tutti i sottotask sono uniti nei branch del padre e prima dell'app
   percorso per riga) e la cartella dei risultati (`FACTORY_E2E_OUT`). Esce con 0 se i test
   passano. Può scrivere `summary.md` nella cartella dei risultati: righe `PASSED:`, `FAILED:`,
   `FLAKY:`, una riga vuota e il dettaglio.
-- `sf` scrive `jobs/<job>/e2e/e2e.md`. L'approver lo legge e classifica ogni test fallito
-  (bug dell'applicazione, test da aggiornare, test instabile, ambiente) con confidenza e prova.
+- **Riferimento.** Prima del padre, `sf` esegue lo stesso script sui branch di integrazione
+  e salva il risultato per commit in `jobs/_base/` (`sf e2e --base [--force]` lo esegue a mano).
+  Un test che fallisce già lì non conta: il padre è giudicato solo sui test che rompe lui. Il
+  riferimento si ripete solo quando un branch di integrazione cambia.
+- Per il confronto lo script scrive `failed.txt` nella cartella dei risultati: un test fallito per
+  riga, con un nome stabile (file e titolo). Senza `failed.txt` vale solo l'exit dello script.
+- `sf` scrive `jobs/<job>/e2e/e2e.md`, con i nuovi fallimenti separati da quelli già presenti
+  sui branch di integrazione. L'approver classifica i nuovi (bug dell'applicazione, test da
+  aggiornare, test instabile, ambiente) con confidenza e prova.
 - Una esecuzione alla volta per home: lo stack e il database di test sono uno solo. Un
   secondo `sf e2e` aspetta il primo.
 - Se dopo l'esecuzione i branch del padre cambiano, `sf advance` chiede di rieseguirlo.
@@ -499,7 +506,7 @@ Li usa l'orchestratore, ma servono anche a mano per capire lo stato.
 | `sf check <job>` | Prova i controlli del gate nel worktree di un sottotask. |
 | `sf gate <job>` / `sf gate --base [<repo>] [--force]` | Gate di un sottotask / del branch di integrazione. |
 | `sf reviews <job>` | Aggiorna i verdetti del giro e stampa il passo successivo. |
-| `sf e2e <job>` | Test end-to-end del padre sui suoi branch, prima dell'approver. |
+| `sf e2e <job>` / `sf e2e --base [--force]` | Test end-to-end del padre sui suoi branch, prima dell'approver / il riferimento sui branch di integrazione. |
 | `sf merge <job>` | Allinea, ripete il gate e unisce le PR. |
 | `sf header <job>` | La riga con cui comincia ogni prompt degli agenti. |
 | `sf mcp` | Avvia il server MCP di Odoo (lo usa Claude Code). |

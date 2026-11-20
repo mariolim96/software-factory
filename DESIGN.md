@@ -51,7 +51,10 @@ il sottotask torna in `build` se resta almeno un finding confermato, altrimenti 
 Lo stadio successivo lo dice `sf reviews` (`NEXT:`).
 
 In `approve`, con `e2e.mode` attivo, `sf e2e` esegue lo script E2E della home sui branch del
-padre e scrive `e2e/e2e.md` con i commit provati. `sf advance` da `approve` verso il merge
+padre e scrive `e2e/e2e.md` con i commit provati. Prima esegue lo stesso script sui branch di
+integrazione, una volta per insieme di commit (`jobs/_base/e2e-*`), e il verdetto del padre
+conta solo i test che falliscono con il task e non lì: una suite indietro rispetto al codice
+non diventa rumore su ogni task. `sf advance` da `approve` verso il merge
 rifiuta se manca un'esecuzione su quei commit; in `blocking` anche se è fallita, in `info` no:
 la classificazione dell'approver (`## E2E` di decision.md) va al team leader. Un lock
 (`jobs/.e2e.lock`) tiene un'esecuzione alla volta, perché lo stack di test è uno solo, e `sf e2e`

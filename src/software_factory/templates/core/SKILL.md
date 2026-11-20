@@ -101,7 +101,8 @@ per esempio `t9563-s9601 T9601: gate PASS → review (code sonnet, security opus
 
 **approve.** Dopo `sf advance <job> approve` (te lo dice la coda), se `factory.json` ha
 `e2e.mode` diverso da `off`, esegui prima `sf e2e <job>` in background (alza lo stack di test
-con i branch del padre e lancia i test end-to-end: può durare decine di minuti, e attende se
+con i branch del padre e lancia i test end-to-end: può durare decine di minuti, il doppio
+quando prima esegue il riferimento sui branch di integrazione appena cambiati, e attende se
 un altro padre li sta già eseguendo). Il comando esce con 1 quando i test falliscono: non è un
 errore della factory, lancia comunque l'approver, che legge `e2e/e2e.md`. Un rifiuto di
 `sf advance` che chiede `sf e2e` vuol dire che i branch sono cambiati dall'ultima esecuzione:
