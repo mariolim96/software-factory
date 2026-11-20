@@ -169,7 +169,10 @@ def cmd_odoo_key(home, args):
         key = getpass.getpass("Nuova chiave API di Odoo (non viene mostrata): ").strip()
     else:
         key = sys.stdin.readline().strip()
+    key = key.lstrip("﻿").strip()  # PowerShell piped into WSL starts with a BOM
     require(key, "nessuna chiave")
+    require(key.isascii() and key.isprintable() and " " not in key,
+            "la chiave contiene caratteri non validi: incolla solo la chiave")
     uid = check_key(home.cfg, key)
     path = Path(home.cfg["odoo"]["credentials_file"]).expanduser()
     for target in [path, *(Path(x).expanduser() for x in a.also)]:
