@@ -25,7 +25,7 @@ eseguito da lì.
 
 ```
 task padre (tag factory, To Do)
-  triage (fable) ── UNCLEAR → nota con domande, resta in To Do finché PM o team leader rispondono
+  triage (opus) ── UNCLEAR → nota con domande, resta in To Do finché PM o team leader rispondono
        │ PLAN: sf crea i sottotask in Odoo (BE per la factory; FE per la persona del front-end,
        │       o per la factory se il task ha anche il tag factory-fe)
        ▼

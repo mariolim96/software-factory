@@ -283,7 +283,7 @@ massima più lunga per le chiavi del tuo utente.
 
 | Agente | Modello | Che cosa fa | Scrive |
 |---|---|---|---|
-| `triage` | fable | Decide se il task è chiaro, valuta rischio e superfici, pianifica i sottotask e il contratto API. | `triage.md` |
+| `triage` | opus | Decide se il task è chiaro, valuta rischio e superfici, pianifica i sottotask e il contratto API. | `triage.md` |
 | `spec-writer` | opus | Trasforma un sottotask in una spec con criteri di accettazione verificabili, o fa domande al PM. | `spec.md` o `questions.md` |
 | `builder` | opus | Realizza la spec sul branch del sottotask, con i test; prova il gate con `sf check`. | codice, `build.md` |
 | `reviewer-<r>` | dal routing | Rivede il branch con finding etichettati per gravità. | `round-N/review-<r>.md` |

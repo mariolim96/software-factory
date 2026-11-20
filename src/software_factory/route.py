@@ -10,7 +10,7 @@ When both ask for a reviewer, the stronger model wins.
 import fnmatch
 import re
 
-STRENGTH = {"haiku": 0, "sonnet": 1, "opus": 2, "fable": 3}
+STRENGTH = {"haiku": 0, "sonnet": 1, "opus": 2}
 
 
 def stronger(a, b):

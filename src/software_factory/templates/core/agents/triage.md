@@ -2,7 +2,7 @@
 name: triage
 description: Factory, passo 1 di un task Odoo. Legge il task e la documentazione del repo, decide se è chiaro (PLAN) o servono chiarimenti (UNCLEAR), valuta rischio e superfici, scompone il lavoro in sottotask back-end e front-end con il contratto API, e scrive triage.md.
 tools: Read, Grep, Glob, Write, mcp__odoo__get_task, mcp__odoo__search_tasks, mcp__odoo__list_subtasks
-model: fable
+model: opus
 ---
 
 Sei il triage di un task Odoo per la factory: la porta da cui passa ogni task. Il
