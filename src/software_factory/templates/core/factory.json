@@ -2,35 +2,96 @@
   "concurrency": 2,
   "max_rounds": 3,
   "merge_method": "merge",
-  "merge_policy": { "low": "auto", "medium": "human", "high": "human" },
-  "verify": { "votes": 2, "confirm": 2, "model": "sonnet" },
-  "e2e": { "mode": "off", "script": "checks/e2e.sh" },
+  "merge_policy": {
+    "low": "auto",
+    "medium": "human",
+    "high": "human"
+  },
+  "verify": {
+    "votes": 2,
+    "confirm": 2,
+    "model": "sonnet"
+  },
+  "e2e": {
+    "mode": "off",
+    "script": "checks/e2e.sh"
+  },
   "odoo": {
     "url": "https://<instance>.odoo.com",
     "db": "<database>",
     "credentials_file": "~/.config/software-factory/odoo.json",
     "project_id": 0,
-    "stages": { "todo": 0, "in_progress": 0, "review": 0, "test": 0, "done": 0 },
-    "tags": { "queue": 0, "frontend": 0, "backend": 0, "waiting_fe": 0, "escalation": 0 },
-    "users": { "pm": 0, "team_leader": 0, "frontend": 0 }
+    "stages": {
+      "todo": 0,
+      "in_progress": 0,
+      "review": 0,
+      "test": 0,
+      "done": 0
+    },
+    "tags": {
+      "queue": 0,
+      "frontend": 0,
+      "backend": 0,
+      "waiting_fe": 0,
+      "escalation": 0
+    },
+    "users": {
+      "pm": 0,
+      "team_leader": 0,
+      "frontend": 0
+    }
   },
   "references": [],
   "refs_dir": "~/.cache/software-factory/refs",
-  "protected_paths": [".github/**"],
+  "protected_paths": [
+    ".github/**"
+  ],
   "high_risk_paths": [],
   "routing": {
-    "low": { "code": "haiku" },
-    "medium": { "code": "sonnet" },
-    "high": { "code": "sonnet" }
+    "low": {
+      "code": "haiku"
+    },
+    "medium": {
+      "code": "sonnet"
+    },
+    "high": {
+      "code": "opus"
+    }
   },
   "surface_reviewers": {
-    "security": { "security": "opus" }
+    "security": {
+      "security": "opus"
+    }
   },
   "path_reviewers": {},
   "prices_usd_per_mtok": {
-    "claude-fable-5-2": { "input": 10.0, "output": 50.0, "cache_write_5m": 12.5, "cache_write_1h": 20.0, "cache_read": 0.25 },
-    "claude-opus-5-5": { "input": 4.0, "output": 20.0, "cache_write_5m": 5.0, "cache_write_1h": 8.0, "cache_read": 0.2 },
-    "claude-sonnet-5-5": { "input": 2.0, "output": 10.0, "cache_write_5m": 2.5, "cache_write_1h": 4.0, "cache_read": 0.2 },
-    "claude-haiku-5-5": { "input": 0.1, "output": 0.5, "cache_write_5m": 0.125, "cache_write_1h": 0.2, "cache_read": 0.01 }
+    "claude-fable-5-2": {
+      "input": 10.0,
+      "output": 50.0,
+      "cache_write_5m": 12.5,
+      "cache_write_1h": 20.0,
+      "cache_read": 0.25
+    },
+    "claude-opus-5-5": {
+      "input": 4.0,
+      "output": 20.0,
+      "cache_write_5m": 5.0,
+      "cache_write_1h": 8.0,
+      "cache_read": 0.2
+    },
+    "claude-sonnet-5-5": {
+      "input": 2.0,
+      "output": 10.0,
+      "cache_write_5m": 2.5,
+      "cache_write_1h": 4.0,
+      "cache_read": 0.2
+    },
+    "claude-haiku-5-5": {
+      "input": 0.1,
+      "output": 0.5,
+      "cache_write_5m": 0.125,
+      "cache_write_1h": 0.2,
+      "cache_read": 0.01
+    }
   }
 }

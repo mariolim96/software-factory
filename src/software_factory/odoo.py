@@ -19,7 +19,7 @@ import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
 
-MARK = "🤖 Factory"
+MARK = ""
 
 
 class OdooError(Exception):
